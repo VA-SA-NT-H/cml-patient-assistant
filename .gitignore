@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+
+# Environment variables (Secrets)
+.env
+agent/.env
+
+# Local databases
+chroma_db/
+agent/chroma_db/
+
+# Streamlit local configurations
+.streamlit/
+
+# OS metadata
+.DS_Store
+Thumbs.db
