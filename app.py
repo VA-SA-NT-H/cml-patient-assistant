@@ -15,7 +15,7 @@ init_db()
 st.set_page_config(
     page_title="CML Assistant",
     page_icon=None,
-    layout="wide",
+    layout="centered",  # Centered layout for ChatGPT-style UI
     initial_sidebar_state="expanded"
 )
 
