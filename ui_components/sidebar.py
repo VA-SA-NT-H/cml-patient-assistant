@@ -5,6 +5,10 @@ from database import get_all_sessions, get_session_messages, delete_session, ren
 def render_sidebar():
     """Renders the chat history sidebar and handles session switching/deletion/renaming/creation."""
     
+    # Auto-detect system theme on first load
+    if "theme" not in st.session_state:
+        st.session_state.theme = "dark"  # Default to dark like ChatGPT
+    
     # Theme-aware sidebar styling
     st.sidebar.markdown(
         """
@@ -46,46 +50,91 @@ def render_sidebar():
         st.session_state.session_id = str(uuid.uuid4())
         st.session_state.chat_display = []
         st.session_state.is_temporary = False
-        st.session_state.show_header_options = False
         st.rerun()
 
     # Load past sessions from local SQLite DB
     past_sessions = get_all_sessions()
     for sess_id, title, created_at in past_sessions:
-        # Create columns to fit the select button and the options button side-by-side
-        col_btn, col_dots = st.sidebar.columns([6, 1.5])
+        is_active = st.session_state.session_id == sess_id
         
-        with col_btn:
-            if st.button(f"{title}", key=sess_id, use_container_width=True, help=f"Load chat: {title}"):
+        # Session item container
+        col_session, col_actions = st.sidebar.columns([6, 1])
+        
+        with col_session:
+            # Session button with active state
+            if st.button(
+                f"{'→ ' if is_active else ''}{title}",
+                key=sess_id,
+                use_container_width=True,
+                help=f"Load chat: {title}"
+            ):
                 st.session_state.session_id = sess_id
                 st.session_state.chat_display = get_session_messages(sess_id)
                 st.session_state.is_temporary = False
-                st.session_state.show_header_options = False
                 st.rerun()
-                
-        with col_dots:
-            # 3-dots options menu toggle button (tertiary/borderless)
-            if st.button("⋮", key=f"dots_{sess_id}", use_container_width=True, help=f"Options for {title}", type="tertiary"):
-                st.session_state[f"show_options_{sess_id}"] = not st.session_state.get(f"show_options_{sess_id}", False)
+        
+        with col_actions:
+            # Edit button (pencil icon)
+            if st.button("✏️", key=f"edit_{sess_id}", help=f"Rename: {title}"):
+                st.session_state[f"renaming_{sess_id}"] = True
                 st.rerun()
-                
-        # Inline options shown under the chat item if toggled active
-        if st.session_state.get(f"show_options_{sess_id}", False):
-            new_title = st.sidebar.text_input("Rename", value=title, key=f"ren_input_{sess_id}", label_visibility="collapsed")
-            col_save, col_del = st.sidebar.columns(2)
+            
+            # Delete button (trash icon)
+            if st.button("🗑️", key=f"del_{sess_id}", help=f"Delete: {title}"):
+                delete_session(sess_id)
+                if st.session_state.session_id == sess_id:
+                    st.session_state.session_id = str(uuid.uuid4())
+                    st.session_state.chat_display = []
+                    st.session_state.is_temporary = False
+                st.rerun()
+        
+        # Inline rename mode
+        if st.session_state.get(f"renaming_{sess_id}", False):
+            new_title = st.sidebar.text_input(
+                "Rename",
+                value=title,
+                key=f"ren_input_{sess_id}",
+                label_visibility="collapsed"
+            )
+            col_save, col_cancel = st.sidebar.columns(2)
             with col_save:
-                if st.button("Save", key=f"ren_save_{sess_id}", use_container_width=True, help="Save new title"):
+                if st.button("✓ Save", key=f"ren_save_{sess_id}", use_container_width=True):
                     if new_title.strip():
                         rename_session(sess_id, new_title.strip())
-                        st.session_state[f"show_options_{sess_id}"] = False
-                        st.rerun()
-            with col_del:
-                if st.button("Delete", key=f"del_btn_{sess_id}", use_container_width=True, type="primary", help=f"Delete chat: {title}"):
-                    delete_session(sess_id)
-                    # If deleted session is the currently active one, automatically load a new chat session
-                    if st.session_state.session_id == sess_id:
-                        st.session_state.session_id = str(uuid.uuid4())
-                        st.session_state.chat_display = []
-                        st.session_state.is_temporary = False
-                    st.session_state[f"show_options_{sess_id}"] = False
+                    st.session_state[f"renaming_{sess_id}"] = False
                     st.rerun()
+            with col_cancel:
+                if st.button("✕ Cancel", key=f"ren_cancel_{sess_id}", use_container_width=True):
+                    st.session_state[f"renaming_{sess_id}"] = False
+                    st.rerun()
+    
+    # Theme toggle at sidebar footer - ALWAYS at bottom (sticky)
+    st.sidebar.markdown(
+        """
+        <style>
+        .theme-toggle-fixed {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 300px;
+            padding: 16px;
+            background: var(--bg-secondary);
+            z-index: 999;
+            border-top: 1px solid var(--border);
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    # Create a container for the theme toggle
+    st.sidebar.markdown('<div class="theme-toggle-fixed">', unsafe_allow_html=True)
+    
+    is_dark = st.session_state.theme == "dark"
+    theme_label = "🌙 Dark" if is_dark else "☀️ Light"
+    
+    if st.sidebar.button(theme_label, key="theme_toggle_sidebar", help="Toggle theme", use_container_width=True):
+        st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
+        st.rerun()
+    
+    st.sidebar.markdown('</div>', unsafe_allow_html=True)
