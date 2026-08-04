@@ -39,6 +39,54 @@ def render_sidebar():
         [data-testid="stSidebar"] label {
             color: var(--text-primary) !important;
         }
+        
+        /* 3-dot menu styles */
+        .session-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 0;
+        }
+        .session-title {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .three-dot-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+        .three-dot-btn:hover {
+            background: var(--bg-tertiary);
+        }
+        .session-dropdown {
+            position: absolute;
+            right: 0;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            min-width: 150px;
+            padding: 4px 0;
+        }
+        .session-dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            cursor: pointer;
+            color: var(--text-primary);
+        }
+        .session-dropdown-item:hover {
+            background: var(--bg-tertiary);
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -74,19 +122,43 @@ def render_sidebar():
                 st.rerun()
         
         with col_actions:
-            # Edit button (pencil icon)
-            if st.button("✏️", key=f"edit_{sess_id}", help=f"Rename: {title}"):
-                st.session_state[f"renaming_{sess_id}"] = True
+            # Three-dot menu button
+            if st.button("⋯", key=f"menu_{sess_id}", help=f"Actions for: {title}"):
+                st.session_state[f"show_menu_{sess_id}"] = not st.session_state.get(f"show_menu_{sess_id}", False)
                 st.rerun()
             
-            # Delete button (trash icon)
-            if st.button("🗑️", key=f"del_{sess_id}", help=f"Delete: {title}"):
-                delete_session(sess_id)
-                if st.session_state.session_id == sess_id:
-                    st.session_state.session_id = str(uuid.uuid4())
-                    st.session_state.chat_display = []
-                    st.session_state.is_temporary = False
-                st.rerun()
+            # Dropdown menu
+            if st.session_state.get(f"show_menu_{sess_id}", False):
+                st.markdown(
+                    f"""
+                    <div class="session-dropdown">
+                        <div class="session-dropdown-item">
+                            ✏️ Rename
+                        </div>
+                        <div class="session-dropdown-item">
+                            🗑️ Delete
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+                
+                # Actual buttons for functionality
+                col_rename, col_delete = st.columns(2)
+                with col_rename:
+                    if st.button("✏️ Rename", key=f"rename_{sess_id}", use_container_width=True):
+                        st.session_state[f"renaming_{sess_id}"] = True
+                        st.session_state[f"show_menu_{sess_id}"] = False
+                        st.rerun()
+                with col_delete:
+                    if st.button("🗑️ Delete", key=f"delete_{sess_id}", use_container_width=True):
+                        delete_session(sess_id)
+                        if st.session_state.session_id == sess_id:
+                            st.session_state.session_id = str(uuid.uuid4())
+                            st.session_state.chat_display = []
+                            st.session_state.is_temporary = False
+                        st.session_state[f"show_menu_{sess_id}"] = False
+                        st.rerun()
         
         # Inline rename mode
         if st.session_state.get(f"renaming_{sess_id}", False):
