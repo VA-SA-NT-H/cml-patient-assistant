@@ -22,8 +22,8 @@ def render_header():
             --text-primary: {'#f1f5f9' if is_dark else '#0f172a'};
             --text-secondary: {'#94a3b8' if is_dark else '#64748b'};
             --border: {'#334155' if is_dark else '#cbd5e1'};
-            --accent: #ef4444;
-            --accent-hover: #dc2626;
+            --accent: #8b5cf6;
+            --accent-hover: #7c3aed;
         }}
         
         .stApp {{
@@ -235,9 +235,6 @@ def render_header():
             """,
             unsafe_allow_html=True
         )
-        if st.button("Toggle Theme", key="theme_toggle_btn", help="Switch between dark and light mode"):
-            st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
-            st.rerun()
 
     with col_actions:
         st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
