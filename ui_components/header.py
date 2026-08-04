@@ -232,9 +232,21 @@ def render_header():
                     <span class="theme-toggle-icon">{theme_icon}</span>
                 </div>
             </div>
+            <style>
+            div[data-testid="stColumn"]:nth-of-type(2) button {{
+                position: absolute;
+                opacity: 0;
+                width: 48px;
+                height: 24px;
+                margin: 8px 0 0 0;
+            }}
+            </style>
             """,
             unsafe_allow_html=True
         )
+        if st.button("Toggle Theme", key="theme_toggle_btn", help="Switch between dark and light mode"):
+            st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
+            st.rerun()
 
     with col_actions:
         st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
