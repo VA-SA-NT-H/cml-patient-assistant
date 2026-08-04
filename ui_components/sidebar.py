@@ -7,37 +7,34 @@ def render_sidebar():
     
     # Theme-aware sidebar styling
     st.sidebar.markdown(
-        f"""
+        """
         <style>
-        [data-testid="stSidebar"] .stButton button {{
+        [data-testid="stSidebar"] .stButton button {
             background-color: var(--bg-tertiary) !important;
             color: var(--text-primary) !important;
             border: 1px solid var(--border) !important;
             transition: all 0.2s ease !important;
-        }}
-        [data-testid="stSidebar"] .stButton button:hover {{
+        }
+        [data-testid="stSidebar"] .stButton button:hover {
             background-color: var(--border) !important;
             border-color: var(--accent) !important;
-        }}
-        [data-testid="stSidebar"] .stButton button:focus {{
+        }
+        [data-testid="stSidebar"] .stButton button:focus {
             outline: 2px solid var(--accent) !important;
             outline-offset: 2px !important;
-        }}
-        [data-testid="stSidebar"] .stTextInput input {{
+        }
+        [data-testid="stSidebar"] .stTextInput input {
             background-color: var(--bg-tertiary) !important;
             color: var(--text-primary) !important;
             border: 1px solid var(--border) !important;
-        }}
-        [data-testid="stSidebar"] .stTextInput input:focus {{
+        }
+        [data-testid="stSidebar"] .stTextInput input:focus {
             border-color: var(--accent) !important;
-            box-shadow: 0 0 0 2px rgba(239,68,68,0.2) !important;
-        }}
-        [data-testid="stSidebar"] hr {{
-            border-color: var(--border) !important;
-        }}
-        [data-testid="stSidebar"] label {{
+            box-shadow: 0 0 0 2px rgba(139,92,246,0.2) !important;
+        }
+        [data-testid="stSidebar"] label {
             color: var(--text-primary) !important;
-        }}
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -92,5 +89,3 @@ def render_sidebar():
                         st.session_state.is_temporary = False
                     st.session_state[f"show_options_{sess_id}"] = False
                     st.rerun()
-            # Visual separator between historical items
-            st.sidebar.markdown("---")
