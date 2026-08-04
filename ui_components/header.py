@@ -99,14 +99,16 @@ def render_header():
         .theme-toggle-pill {{
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 4px;
             padding: 4px;
             border-radius: 24px;
             background: var(--bg-tertiary);
             border: 1px solid var(--border);
             cursor: pointer;
             transition: all 0.3s ease;
-            min-width: 80px;
+            min-width: 48px;
+            height: 24px;
+            box-sizing: border-box;
         }}
         .theme-toggle-pill:hover {{
             border-color: var(--accent);
@@ -118,21 +120,22 @@ def render_header():
         }}
         
         .theme-toggle-knob {{
-            width: 20px;
-            height: 20px;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
             background: {'#fbbf24' if is_dark else '#ffffff'};
             box-shadow: 0 1px 3px rgba(0,0,0,0.3);
             transition: transform 0.2s ease, background 0.3s ease;
-            transform: translateX({'36px' if is_dark else '0px'});
+            transform: translateX({'20px' if is_dark else '0px'});
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 12px;
         }}
         
         .theme-toggle-icon {{
-            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             transition: opacity 0.2s ease;
         }}
         
@@ -218,11 +221,13 @@ def render_header():
 
     with col_toggle:
         st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
-        theme_icon = "☀️" if is_dark else "🌙"
-        knob_style = "transform: translateX(36px);" if is_dark else "transform: translateX(0px);"
+        knob_style = "transform: translateX(20px);" if is_dark else "transform: translateX(0px);"
+        sun_svg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>'
+        moon_svg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>'
+        theme_icon = sun_svg if is_dark else moon_svg
         st.markdown(
             f"""
-            <div class="theme-toggle-pill" onclick="window.parent.document.querySelector('[data-testid=\"stSidebar\"]').click()">
+            <div class="theme-toggle-pill">
                 <div class="theme-toggle-knob" style="{knob_style}">
                     <span class="theme-toggle-icon">{theme_icon}</span>
                 </div>
@@ -261,7 +266,7 @@ def render_header():
             <style>
             .options-container {{
                 background: var(--bg-secondary);
-                border: 1px solid var(--border-color);
+                border: 1px solid var(--border);
                 border-radius: 8px;
                 padding: 12px;
                 margin: 8px 0;
