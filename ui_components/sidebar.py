@@ -6,7 +6,6 @@ def render_sidebar():
     """Renders the chat history sidebar and handles session switching/deletion/renaming/creation."""
     
     # Theme-aware sidebar styling
-    is_dark = st.session_state.get("theme", "light") == "dark"
     st.sidebar.markdown(
         f"""
         <style>
