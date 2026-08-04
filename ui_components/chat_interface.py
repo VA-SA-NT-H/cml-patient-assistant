@@ -11,53 +11,150 @@ def render_chat_interface(client, model_name, tools, tools_map, system_instructi
         """
         <style>
         [data-testid="stChatMessage"] {
-            background-color: var(--bg-secondary) !important;
-            border: 1px solid var(--border) !important;
-            border-radius: 12px !important;
+            background-color: transparent !important;
+            border: none !important;
+            border-radius: 0 !important;
             padding: 16px !important;
-            margin: 8px 0 !important;
-        }
-        [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
-            border-left: 2px solid var(--accent) !important;
+            margin: 0 !important;
+            max-width: 100% !important;
         }
         
         .empty-state {
             text-align: center;
             padding: 60px 20px;
             color: var(--text-secondary);
+            max-width: 800px;
+            margin: 0 auto;
         }
         .empty-state h2 {
             color: var(--text-primary);
             margin-bottom: 12px;
+            font-weight: 500;
         }
         .empty-state p {
             font-size: 16px;
             line-height: 1.6;
+        }
+        
+        /* Suggestion chips */
+        .suggestion-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+            margin-top: 24px;
+        }
+        .suggestion-chip {
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 12px 20px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 14px;
+            max-width: 300px;
+        }
+        .suggestion-chip:hover {
+            background-color: var(--border);
+            border-color: var(--accent);
+        }
+        
+        /* Temporary toggle */
+        .temp-toggle-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 8px 16px;
+        }
+        .temp-toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+        }
+        .temp-toggle-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+        .temp-toggle-pill {
+            width: 44px;
+            height: 24px;
+            border-radius: 12px;
+            background: #424242;
+            position: relative;
+            transition: background 0.2s ease;
+        }
+        .temp-toggle-pill.active {
+            background: #8b5cf6;
+        }
+        .temp-toggle-circle {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: white;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.2s ease;
+        }
+        .temp-toggle-pill.active .temp-toggle-circle {
+            transform: translateX(20px);
         }
         </style>
         """,
         unsafe_allow_html=True
     )
     
-    # Empty state when no messages
+    # Empty state when no messages - ChatGPT style with suggestion chips
     if len(st.session_state.chat_display) == 0:
         st.markdown(
             """
             <div class="empty-state">
                 <h2>How can I help you today?</h2>
                 <p>Ask me anything about CML, TKI medications, side effects, or lifestyle tips.</p>
+                <div class="suggestion-chips">
+                    <div class="suggestion-chip">What are the common side effects of Imatinib?</div>
+                    <div class="suggestion-chip">How should I manage fatigue during TKI therapy?</div>
+                    <div class="suggestion-chip">What foods should I avoid while taking TKIs?</div>
+                    <div class="suggestion-chip">How often should I get my blood tested?</div>
+                </div>
             </div>
             """,
             unsafe_allow_html=True
         )
+    
+    # Temporary Session Toggle (top-right corner of chat area) - ChatGPT style
+    is_temp = st.session_state.get("is_temporary", False)
+    active_class = "active" if is_temp else ""
+    
+    st.markdown(
+        f"""
+        <div class="temp-toggle-wrapper">
+            <div class="temp-toggle-container">
+                <span class="temp-toggle-label">Temporary</span>
+                <div class="temp-toggle-pill {active_class}">
+                    <div class="temp-toggle-circle"></div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    # Use a hidden button for the actual toggle functionality
+    if st.button("Toggle", key="temp_toggle_header", help="Toggle temporary session", 
+                 label_visibility="collapsed"):
+        st.session_state.is_temporary = not st.session_state.is_temporary
+        st.rerun()
 
-    # 1. Render all messages in the chat session
+    # 1. Render all messages in the chat session - borderless style
     for msg in st.session_state.chat_display:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # 2. Accept user input
-    if user_question := st.chat_input("Ask a question about your medication..."):
+    # 2. Accept user input with theme-aware styling
+    if user_question := st.chat_input("Message CML Assistant..."):
         
         is_temp = st.session_state.get("is_temporary", False)
 
