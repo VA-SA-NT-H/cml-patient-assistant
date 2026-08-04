@@ -11,13 +11,14 @@ def render_chat_interface(client, model_name, tools, tools_map, system_instructi
         """
         <style>
         [data-testid="stChatMessage"] {
-            border-left: 3px solid var(--border) !important;
+            background-color: var(--bg-secondary) !important;
+            border: 1px solid var(--border) !important;
+            border-radius: 12px !important;
+            padding: 16px !important;
+            margin: 8px 0 !important;
         }
         [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
-            border-left-color: var(--accent) !important;
-        }
-        [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) {
-            border-left-color: #3b82f6 !important;
+            border-left: 2px solid var(--accent) !important;
         }
         
         .empty-state {
@@ -33,10 +34,6 @@ def render_chat_interface(client, model_name, tools, tools_map, system_instructi
             font-size: 16px;
             line-height: 1.6;
         }
-        .empty-state .icon {
-            font-size: 48px;
-            margin-bottom: 16px;
-        }
         </style>
         """,
         unsafe_allow_html=True
@@ -47,7 +44,6 @@ def render_chat_interface(client, model_name, tools, tools_map, system_instructi
         st.markdown(
             """
             <div class="empty-state">
-                <div class="icon">💬</div>
                 <h2>How can I help you today?</h2>
                 <p>Ask me anything about CML, TKI medications, side effects, or lifestyle tips.</p>
             </div>
