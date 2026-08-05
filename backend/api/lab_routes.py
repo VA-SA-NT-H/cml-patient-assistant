@@ -7,9 +7,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from database import (
     save_lab_result, get_lab_results, update_lab_result, delete_lab_result,
-    save_treatment, get_treatments, update_treatment, delete_treatment
+    save_treatment, get_treatments, update_treatment, delete_treatment,
+    get_milestones
 )
 from api.upload_parser import parse_csv, parse_pdf
+from lab_warnings import check_trends
+from datetime import datetime
 
 router = APIRouter(prefix="/api", tags=["lab-results"])
 
@@ -170,3 +173,38 @@ async def bulk_create_lab_results(data: BulkCreate):
         )
         created += 1
     return {"created": created}
+
+@router.get("/dashboard")
+async def get_dashboard():
+    lab_results = get_lab_results()
+    treatments = get_treatments()
+    milestones = get_milestones()
+
+    # Latest values
+    latest = {}
+    for test_type in ("bcr_abl1", "cbc_wbc", "cbc_platelets", "cbc_hemoglobin"):
+        type_results = [r for r in lab_results if r["test_type"] == test_type]
+        if type_results:
+            latest[test_type] = max(type_results, key=lambda x: x["test_date"])
+
+    # Current treatment (no end_date)
+    current_treatment = None
+    for t in treatments:
+        if t["end_date"] is None:
+            current_treatment = t
+
+    # Compute warnings
+    warnings = check_trends(lab_results, treatments)
+
+    return {
+        "latest_values": latest,
+        "current_treatment": current_treatment,
+        "warnings": warnings,
+        "milestones": milestones,
+        "total_results": len(lab_results),
+    }
+
+
+@router.get("/milestones", response_model=List[dict])
+async def list_milestones():
+    return get_milestones()
