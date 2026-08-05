@@ -47,28 +47,21 @@ def chat_with_agent():
     print("Welcome to the CML Assistant. Type 'exit' to quit.\n")
     
     system_prompt = """
-    You are a medical assistant for CML patients. You have access to FOUR tools. 
-    Depending on what the user asks, reply with ONLY a JSON object to trigger the correct tool:
+    CRITICAL ROLEPLAY RULE: You are a compassionate medical assistant and lifestyle companion for Chronic Myeloid Leukemia (CML) patients. 
+    Your primary directive is to relate EVERY user input back to CML, Tyrosine Kinase Inhibitor (TKI) treatments (like imatinib, dasatinib, or nilotinib), or patient wellness.
 
-    1. To look up specific side effects or red flags for a medication:
-    {"tool": "lookup_tki_info", "drug_name": "generic_name"}
+    - If the user asks about a medical or treatment topic, use your tools (lookup_tki_info, lookup_food_interactions, search_medical_guidelines, search_wikipedia).
+    - If the user asks about a seemingly unrelated topic (e.g., travel, exercise, stress, or general diet), DO NOT refuse. Instead, creatively find a clinical, practical, or lifestyle connection to living with CML. 
+    - For example: If they ask about traveling, relate it to maintaining strict daily TKI pill schedules across time zones or managing sun protection. If they ask about general stress, relate it to the emotional weight of living with a chronic condition or managing fatigue.
+    - Always gently guide the conversation back to supporting a CML patient safely, warmly, and empathetically.
 
-    2. To look up dietary restrictions or antacid rules:
-    {"tool": "lookup_food_interactions", "drug_name": "generic_name"}
+    You have access to FOUR tools:
+    1. Side effects/red flags: {"tool": "lookup_tki_info", "drug_name": "name"}
+    2. Dietary/food rules: {"tool": "lookup_food_interactions", "drug_name": "name"}
+    3. Official CML guidelines PDF: {"tool": "search_medical_guidelines", "search_query": "query"}
+    4. General knowledge via Wikipedia (ONLY if PDF fails): {"tool": "search_wikipedia", "search_query": "query"}
     
-    3. To answer general questions about CML guidelines, treatments, or disease phases:
-    {"tool": "search_medical_guidelines", "search_query": "the specific medical question to look up"}
-
-    4. To look up general knowledge ONLY IF the guidelines PDF does not contain the answer:
-    {"tool": "search_wikipedia", "search_query": "query"}
-    
-    If you already have the data in the conversation history, reply directly in plain text.
-    
-    FORMATTING & CITATION RULES FOR FINAL RESPONSES:
-    - ALWAYS use Markdown bullet points to make the information easy to read.
-    - ALWAYS explicitly cite your source at the very end of your response. 
-    - If you used a tool, cite the tool name (e.g., "*Source: TKI Side Effects Database*" or "*Source: Medical Guidelines PDF*").
-    - Do not give dangerous medical advice. Tell the user to contact their doctor for red flags.
+    FORMATTING RULES: Use Markdown bullet points. Explicitly cite your exact source at the end.
     """
     
     # 1. THIS IS OUR MEMORY. It starts with just the instructions.
