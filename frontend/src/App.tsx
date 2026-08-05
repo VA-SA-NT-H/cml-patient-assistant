@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Box, Typography, CircularProgress } from '@mui/material';
 import { Sidebar } from './components/Sidebar';
 import { ChatMessage } from './components/ChatMessage';
 import { ChatInput } from './components/ChatInput';
+import { Dashboard } from './pages/Dashboard';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -16,6 +18,10 @@ interface Session {
 }
 
 function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isDashboard = location.pathname === '/dashboard';
+
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -55,6 +61,7 @@ function App() {
       setSessions([data, ...sessions]);
       setCurrentSessionId(data.session_id);
       setMessages([]);
+      navigate('/');
     } catch (error) {
       console.error('Failed to create session:', error);
     }
@@ -158,55 +165,63 @@ function App() {
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
       <Sidebar
-        sessions={sessions}
-        currentSessionId={currentSessionId}
-        onSelectSession={handleSelectSession}
+        sessions={isDashboard ? [] : sessions}
+        currentSessionId={isDashboard ? null : currentSessionId}
+        onSelectSession={isDashboard ? () => {} : handleSelectSession}
         onNewChat={handleNewChat}
-        onDeleteSession={handleDeleteSession}
-        onRenameSession={handleRenameSession}
+        onDeleteSession={isDashboard ? () => {} : handleDeleteSession}
+        onRenameSession={isDashboard ? () => {} : handleRenameSession}
+        onNavigateDashboard={() => navigate('/dashboard')}
+        isDashboard={isDashboard}
       />
       
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <Box sx={{ flex: 1, overflow: 'auto', py: 2 }}>
-          {messages.length === 0 ? (
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: '100%',
-                textAlign: 'center',
-                px: 4,
-              }}
-            >
-              <Typography variant="h4" gutterBottom>
-                How can I help you today?
-              </Typography>
-              <Typography variant="body1" color="text.secondary">
-                Ask me anything about CML, TKI medications, side effects, or lifestyle tips.
-              </Typography>
-            </Box>
-          ) : (
-            <>
-              {messages.map((message, index) => (
-                <ChatMessage
-                  key={index}
-                  role={message.role}
-                  content={message.content}
-                />
-              ))}
-              {isLoading && (
-                <Box sx={{ display: 'flex', justifyContent: 'flex-start', px: 2, mb: 2 }}>
-                  <CircularProgress size={20} />
+        {isDashboard ? (
+          <Dashboard />
+        ) : (
+          <>
+            <Box sx={{ flex: 1, overflow: 'auto', py: 2 }}>
+              {messages.length === 0 ? (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100%',
+                    textAlign: 'center',
+                    px: 4,
+                  }}
+                >
+                  <Typography variant="h4" gutterBottom>
+                    How can I help you today?
+                  </Typography>
+                  <Typography variant="body1" color="text.secondary">
+                    Ask me anything about CML, TKI medications, side effects, or lifestyle tips.
+                  </Typography>
                 </Box>
+              ) : (
+                <>
+                  {messages.map((message, index) => (
+                    <ChatMessage
+                      key={index}
+                      role={message.role}
+                      content={message.content}
+                    />
+                  ))}
+                  {isLoading && (
+                    <Box sx={{ display: 'flex', justifyContent: 'flex-start', px: 2, mb: 2 }}>
+                      <CircularProgress size={20} />
+                    </Box>
+                  )}
+                  <div ref={messagesEndRef} />
+                </>
               )}
-              <div ref={messagesEndRef} />
-            </>
-          )}
-        </Box>
-        
-        <ChatInput onSendMessage={handleSendMessage} disabled={isLoading} />
+            </Box>
+            
+            <ChatInput onSendMessage={handleSendMessage} disabled={isLoading} />
+          </>
+        )}
       </Box>
     </Box>
   );

@@ -18,10 +18,10 @@ import {
   TextField,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import DashboardIcon from '@mui/icons-material/Dashboard';
 import ChatIcon from '@mui/icons-material/Chat';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { ThemeToggle } from './ThemeToggle';
 
 interface Session {
@@ -37,6 +37,8 @@ interface SidebarProps {
   onNewChat: () => void;
   onDeleteSession: (sessionId: string) => void;
   onRenameSession: (sessionId: string, newTitle: string) => void;
+  onNavigateDashboard: () => void;
+  isDashboard: boolean;
 }
 
 const DRAWER_WIDTH = 280;
@@ -48,6 +50,8 @@ export const Sidebar = ({
   onNewChat,
   onDeleteSession,
   onRenameSession,
+  onNavigateDashboard,
+  isDashboard,
 }: SidebarProps) => {
   const [editingSession, setEditingSession] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -110,6 +114,15 @@ export const Sidebar = ({
           >
             New Chat
           </Button>
+          <Button
+            fullWidth
+            variant={isDashboard ? 'contained' : 'outlined'}
+            startIcon={<DashboardIcon />}
+            onClick={onNavigateDashboard}
+            sx={{ mt: 1 }}
+          >
+            Dashboard
+          </Button>
         </Box>
         
         <Divider />
@@ -145,9 +158,11 @@ export const Sidebar = ({
                 </ListItemIcon>
                 <ListItemText
                   primary={session.title}
-                  primaryTypographyProps={{
-                    noWrap: true,
-                    variant: 'body2',
+                  slotProps={{
+                    primary: {
+                      noWrap: true,
+                      variant: 'body2',
+                    },
                   }}
                 />
                 <IconButton
