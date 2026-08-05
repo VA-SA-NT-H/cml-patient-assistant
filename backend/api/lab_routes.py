@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from typing import List, Optional
 import sys
@@ -9,6 +9,7 @@ from database import (
     save_lab_result, get_lab_results, update_lab_result, delete_lab_result,
     save_treatment, get_treatments, update_treatment, delete_treatment
 )
+from api.upload_parser import parse_csv, parse_pdf
 
 router = APIRouter(prefix="/api", tags=["lab-results"])
 
@@ -133,3 +134,39 @@ async def update_treatment_endpoint(treatment_id: int, treatment: TreatmentUpdat
 async def delete_treatment_endpoint(treatment_id: int):
     delete_treatment(treatment_id)
     return {"message": "Treatment deleted"}
+
+class BulkLabResult(BaseModel):
+    test_type: str
+    value: str
+    unit: str
+    test_date: str
+    notes: Optional[str] = None
+
+
+class BulkCreate(BaseModel):
+    results: List[BulkLabResult]
+
+
+@router.post("/upload-csv")
+async def upload_csv(file: UploadFile = File(...)):
+    content = await file.read()
+    text = content.decode("utf-8")
+    return parse_csv(text)
+
+
+@router.post("/upload-pdf")
+async def upload_pdf(file: UploadFile = File(...)):
+    content = await file.read()
+    return parse_pdf(content)
+
+
+@router.post("/lab-results/bulk")
+async def bulk_create_lab_results(data: BulkCreate):
+    created = 0
+    for r in data.results:
+        save_lab_result(
+            test_type=r.test_type, value=r.value, unit=r.unit,
+            test_date=r.test_date, notes=r.notes,
+        )
+        created += 1
+    return {"created": created}
