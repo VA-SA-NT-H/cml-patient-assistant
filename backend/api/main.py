@@ -3,9 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
 from api.routes import router
+from api.lab_routes import router as lab_router
 from api.websocket import chat_websocket
+from database import init_db
 
 load_dotenv()
+
+# Initialize database on startup
+init_db()
 
 app = FastAPI(
     title="CML Assistant API",
@@ -40,6 +45,7 @@ app.add_middleware(
 
 # Include API routes
 app.include_router(router)
+app.include_router(lab_router)
 
 @app.get("/")
 async def root():
