@@ -43,3 +43,6 @@ npm-debug.log*
 # Coverage
 .coverage
 htmlcov/
+
+# OpenCode docs
+docs/
