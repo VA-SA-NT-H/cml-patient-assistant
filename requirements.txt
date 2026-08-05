@@ -1,7 +1,0 @@
-google-genai==2.16.0
-streamlit==1.60.0
-tenacity==9.1.4
-chromadb==1.5.9
-PyPDF2==3.0.1
-wikipedia==1.4.0
-python-dotenv==1.2.2

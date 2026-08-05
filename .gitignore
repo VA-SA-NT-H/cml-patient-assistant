@@ -13,10 +13,13 @@ ENV/
 # Environment variables (Secrets)
 .env
 agent/.env
+backend/agent/.env
 
 # Local databases
 chroma_db/
 agent/chroma_db/
+backend/agent/chroma_db/
+cml_chat_history.db
 
 # Streamlit local configurations
 .streamlit/
@@ -24,3 +27,15 @@ agent/chroma_db/
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# Node.js
+node_modules/
+frontend/node_modules/
+
+# Build outputs
+frontend/dist/
+frontend/.vite/
+
+# IDE
+.vscode/
+.idea/
