@@ -76,7 +76,12 @@ export const DataEntryDialog = ({ open, onClose, onSaved }: Props) => {
             onChange={(e) => setUnit(e.target.value)} />
           <TextField label="Date" type="date" value={testDate}
             onChange={(e) => setTestDate(e.target.value)}
-            InputLabelProps={{ shrink: true }} />
+            InputLabelProps={{ shrink: true }}
+            sx={{
+              '& input[type="date"]::-webkit-calendar-picker-indicator': {
+                filter: (theme) => theme.palette.mode === 'dark' ? 'invert(1)' : 'none',
+              },
+            }} />
           <TextField label="Notes (optional)" value={notes}
             onChange={(e) => setNotes(e.target.value)} multiline rows={2} />
         </Box>

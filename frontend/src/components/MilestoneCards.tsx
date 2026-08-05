@@ -26,7 +26,14 @@ export const MilestoneCards = ({ milestones }: Props) => {
   const milestoneMap = Object.fromEntries(milestones.map(m => [m.milestone_type, m]));
 
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 2 }}>
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+        gap: 1.5,
+      }}
+      className="stagger-in"
+    >
       {ALL_MILESTONES.map(type => {
         const info = MILESTONE_LABELS[type];
         const m = milestoneMap[type];
@@ -37,23 +44,47 @@ export const MilestoneCards = ({ milestones }: Props) => {
             key={type}
             elevation={0}
             sx={{
-              border: 1,
-              borderColor: achieved ? 'success.main' : 'divider',
-              bgcolor: achieved ? 'success.light' : 'background.paper',
-              opacity: achieved ? 1 : 0.6,
+              border: '1px solid',
+              borderColor: achieved ? 'rgba(42, 157, 143, 0.3)' : 'divider',
+              bgcolor: achieved
+                ? (theme) => theme.palette.mode === 'dark'
+                  ? 'rgba(42, 157, 143, 0.08)'
+                  : 'rgba(42, 157, 143, 0.04)'
+                : 'background.paper',
+              opacity: achieved ? 1 : 0.5,
+              transition: 'all 0.2s ease-in-out',
+              '&:hover': {
+                transform: 'translateY(-1px)',
+                opacity: achieved ? 1 : 0.7,
+              },
             }}
           >
-            <CardContent sx={{ textAlign: 'center' }}>
+            <CardContent sx={{ textAlign: 'center', py: 2.5, px: 1.5, '&:last-child': { pb: 2.5 } }}>
               {achieved ? (
-                <CheckCircleIcon color="success" sx={{ fontSize: 40 }} />
+                <CheckCircleIcon sx={{ fontSize: 32, color: 'secondary.main' }} />
               ) : (
-                <RadioButtonUncheckedIcon color="disabled" sx={{ fontSize: 40 }} />
+                <RadioButtonUncheckedIcon sx={{ fontSize: 32, color: 'text.secondary', opacity: 0.4 }} />
               )}
-              <Typography variant="h6" sx={{ mt: 1 }}>{info.label}</Typography>
-              <Typography variant="caption" color="text.secondary">{info.threshold}</Typography>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  mt: 1,
+                  fontFamily: '"Space Grotesk", sans-serif',
+                  fontWeight: 600,
+                }}
+              >
+                {info.label}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.6rem' }}>
+                {info.threshold}
+              </Typography>
               {achieved && m?.achieved_date && (
-                <Typography variant="caption" display="block" color="success.dark" sx={{ mt: 0.5 }}>
-                  Achieved: {m.achieved_date}
+                <Typography
+                  variant="caption"
+                  display="block"
+                  sx={{ mt: 0.75, color: 'secondary.main', fontSize: '0.6rem', fontWeight: 500 }}
+                >
+                  {m.achieved_date}
                 </Typography>
               )}
             </CardContent>

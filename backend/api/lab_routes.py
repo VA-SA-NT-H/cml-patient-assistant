@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from database import (
     save_lab_result, get_lab_results, update_lab_result, delete_lab_result,
     save_treatment, get_treatments, update_treatment, delete_treatment,
-    get_milestones
+    get_milestones, delete_all_lab_data
 )
 from api.upload_parser import parse_csv, parse_pdf
 from lab_warnings import check_trends
@@ -24,6 +24,82 @@ class LabResultCreate(BaseModel):
     reference_range: Optional[str] = None
     test_date: str
     notes: Optional[str] = None
+
+
+def recalculate_milestones():
+    """Recalculate all milestones from all existing BCR-ABL1 results."""
+    import sqlite3
+    from database import DB_NAME
+
+    milestones = [
+        ("ccyr", 1.0),
+        ("mmr", 0.1),
+        ("mr4", 0.01),
+        ("mr4_5", 0.0032),
+    ]
+
+    try:
+        results = get_lab_results(test_type="bcr_abl1")
+        print(f"[milestones] Found {len(results)} decrypted BCR-ABL1 results")
+
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+
+        # Find the latest BCR-ABL1 result (most recent test_date)
+        latest_result = None
+        for r in results:
+            try:
+                if latest_result is None or r["test_date"] > latest_result["test_date"]:
+                    latest_result = r
+            except Exception:
+                continue
+
+        if latest_result:
+            print(f"[milestones] Latest result: {latest_result['value']} on {latest_result['test_date']}")
+        else:
+            print("[milestones] No BCR-ABL1 results found")
+
+        for milestone_type, threshold in milestones:
+            achieved = False
+            achieved_date = None
+            achieved_value = None
+
+            if latest_result:
+                try:
+                    cleaned = latest_result["value"].replace('%', '').replace(' ', '').strip()
+                    val = float(cleaned)
+                    print(f"[milestones] {milestone_type}: checking {cleaned} <= {threshold} -> {val <= threshold}")
+                    if val <= threshold:
+                        achieved = True
+                        achieved_date = latest_result["test_date"]
+                        achieved_value = latest_result["value"]
+                except ValueError as e:
+                    print(f"[milestones] Failed to parse '{latest_result['value']}': {e}")
+
+            cursor.execute(
+                "SELECT id FROM milestones WHERE milestone_type = ?",
+                (milestone_type,)
+            )
+            existing = cursor.fetchone()
+
+            if existing:
+                cursor.execute(
+                    "UPDATE milestones SET achieved = ?, achieved_date = ?, value_at_achievement = ? WHERE milestone_type = ?",
+                    (1 if achieved else 0, achieved_date, achieved_value, milestone_type)
+                )
+                print(f"[milestones] Updated {milestone_type}: achieved={achieved}")
+            else:
+                cursor.execute(
+                    "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement) VALUES (?, ?, ?, ?)",
+                    (milestone_type, 1 if achieved else 0, achieved_date, achieved_value)
+                )
+                print(f"[milestones] Inserted {milestone_type}: achieved={achieved}")
+
+        conn.commit()
+        conn.close()
+        print("[milestones] Done")
+    except Exception as e:
+        print(f"[milestones] ERROR: {e}")
 
 
 class LabResultUpdate(BaseModel):
@@ -62,6 +138,9 @@ async def create_lab_result(result: LabResultCreate):
         reference_range=result.reference_range,
         notes=result.notes,
     )
+    # Recalculate milestones after saving BCR-ABL1
+    if result.test_type == "bcr_abl1":
+        recalculate_milestones()
     return LabResultResponse(
         id=row_id, test_type=result.test_type, value=result.value,
         unit=result.unit, reference_range=result.reference_range,
@@ -72,12 +151,16 @@ async def create_lab_result(result: LabResultCreate):
 @router.put("/lab-results/{result_id}")
 async def update_lab_result_endpoint(result_id: int, result: LabResultUpdate):
     update_lab_result(result_id, **result.model_dump(exclude_unset=True))
+    # Recalculate milestones if this was a BCR-ABL1 result
+    if result.test_type == "bcr_abl1" or result.value is not None:
+        recalculate_milestones()
     return {"message": "Lab result updated"}
 
 
 @router.delete("/lab-results/{result_id}")
 async def delete_lab_result_endpoint(result_id: int):
     delete_lab_result(result_id)
+    recalculate_milestones()
     return {"message": "Lab result deleted"}
 
 class TreatmentCreate(BaseModel):
@@ -178,6 +261,9 @@ async def bulk_create_lab_results(data: BulkCreate):
 async def get_dashboard():
     lab_results = get_lab_results()
     treatments = get_treatments()
+
+    # Recalculate milestones on every dashboard load
+    recalculate_milestones()
     milestones = get_milestones()
 
     # Latest values
@@ -208,3 +294,28 @@ async def get_dashboard():
 @router.get("/milestones", response_model=List[dict])
 async def list_milestones():
     return get_milestones()
+
+
+@router.get("/debug/milestones")
+async def debug_milestones():
+    """Debug: show raw milestone data and BCR-ABL1 results."""
+    import sqlite3
+    from database import DB_NAME
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, milestone_type, achieved, achieved_date, value_at_achievement FROM milestones")
+    milestones = cursor.fetchall()
+    cursor.execute("SELECT id, test_type, value, test_date FROM lab_results WHERE test_type = 'bcr_abl1'")
+    bcr_results = cursor.fetchall()
+    conn.close()
+    return {
+        "milestones": [{"id": r[0], "type": r[1], "achieved": r[2], "date": r[3], "value": r[4]} for r in milestones],
+        "bcr_abl1_results": [{"id": r[0], "type": r[1], "value": r[2], "date": r[3]} for r in bcr_results],
+    }
+
+
+@router.delete("/reset")
+async def reset_dashboard():
+    """Delete all lab results, treatments, and milestones."""
+    delete_all_lab_data()
+    return {"message": "All data deleted"}

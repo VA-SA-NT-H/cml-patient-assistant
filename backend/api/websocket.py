@@ -7,6 +7,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from agent.agent import client, model_name
 from agent.tools import lookup_tki_info, lookup_food_interactions, search_medical_guidelines, search_wikipedia
+from database import save_message
 from google.genai import types
 from datetime import datetime, timedelta
 
@@ -84,6 +85,10 @@ async def chat_websocket(websocket: WebSocket):
                 session_id = message_data.get("session_id")
                 user_message = message_data.get("message")
                 
+                # Save user message to database
+                if session_id and user_message:
+                    save_message(session_id, "user", user_message)
+                
                 # Build conversation history (simplified for now)
                 contents = [user_message]
                 
@@ -160,6 +165,10 @@ async def chat_websocket(websocket: WebSocket):
                     "type": "complete",
                     "full_response": full_response
                 })
+                
+                # Save assistant response to database
+                if session_id and full_response:
+                    save_message(session_id, "assistant", full_response)
                 
     except WebSocketDisconnect:
         pass

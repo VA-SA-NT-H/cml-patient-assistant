@@ -68,6 +68,20 @@ def init_db():
     ''')
     conn.commit()
     conn.close()
+    
+    # Ensure default milestones exist
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    default_milestones = ['ccyr', 'mmr', 'mr4', 'mr4_5']
+    for m in default_milestones:
+        cursor.execute("SELECT 1 FROM milestones WHERE milestone_type = ?", (m,))
+        if not cursor.fetchone():
+            cursor.execute(
+                "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement) VALUES (?, 0, NULL, NULL)",
+                (m,)
+            )
+    conn.commit()
+    conn.close()
 
 def create_new_session(session_id: str, title: str):
     """Creates a new chat session."""
@@ -243,16 +257,41 @@ def delete_treatment(row_id: int):
     conn.commit()
     conn.close()
 
+
+def delete_all_lab_data():
+    """Delete all lab results and treatments. Used for dashboard reset."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM lab_results")
+    cursor.execute("DELETE FROM treatments")
+    cursor.execute("DELETE FROM milestones")
+    conn.commit()
+    conn.close()
+    # Re-initialize default milestones
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    for m in ['ccyr', 'mmr', 'mr4', 'mr4_5']:
+        cursor.execute(
+            "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement) VALUES (?, 0, NULL, NULL)",
+            (m,)
+        )
+    conn.commit()
+    conn.close()
+
 def save_milestone(milestone_type: str, achieved: bool, achieved_date: str = None,
                    value_at_achievement: str = None):
     """Save or update a milestone."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    encrypted_val = encrypt_value(value_at_achievement) if value_at_achievement else None
     cursor.execute(
-        "INSERT OR REPLACE INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement) VALUES (?, ?, ?, ?)",
-        (milestone_type, 1 if achieved else 0, achieved_date, encrypted_val)
+        "UPDATE milestones SET achieved = ?, achieved_date = ?, value_at_achievement = ? WHERE milestone_type = ?",
+        (1 if achieved else 0, achieved_date, value_at_achievement, milestone_type)
     )
+    if cursor.rowcount == 0:
+        cursor.execute(
+            "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement) VALUES (?, ?, ?, ?)",
+            (milestone_type, 1 if achieved else 0, achieved_date, value_at_achievement)
+        )
     conn.commit()
     conn.close()
 
@@ -267,7 +306,7 @@ def get_milestones():
     return [
         {"id": r[0], "milestone_type": r[1], "achieved": bool(r[2]),
          "achieved_date": r[3],
-         "value_at_achievement": decrypt_value(r[4]) if r[4] else None}
+         "value_at_achievement": r[4]}
         for r in rows
     ]
 
@@ -277,10 +316,9 @@ def update_milestone(milestone_type: str, achieved: bool, achieved_date: str = N
     """Update a milestone by type."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    encrypted_val = encrypt_value(value_at_achievement) if value_at_achievement else None
     cursor.execute(
         "UPDATE milestones SET achieved = ?, achieved_date = ?, value_at_achievement = ? WHERE milestone_type = ?",
-        (1 if achieved else 0, achieved_date, encrypted_val, milestone_type)
+        (1 if achieved else 0, achieved_date, value_at_achievement, milestone_type)
     )
     conn.commit()
     conn.close()

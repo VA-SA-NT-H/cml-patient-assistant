@@ -1,72 +1,167 @@
 # CML Patient Assistant (TKI Side Effect Navigator)
 
-A Streamlit-based web application and intelligent ReAct agent designed to help Chronic Myeloid Leukemia (CML) patients navigate Tyrosine Kinase Inhibitor (TKI) side effects, food/dietary interactions, and medical guidelines.
+A web application for Chronic Myeloid Leukemia (CML) patients to navigate Tyrosine Kinase Inhibitor (TKI) side effects, track lab results, and manage their treatment journey.
 
 ## Features
 
-- **TKI Info Lookup:** Instantly access common side effects and clinical "red flags" (symptoms requiring immediate medical attention) for all major TKIs (Imatinib, Dasatinib, Nilotinib, Bosutinib, Ponatinib, and Asciminib).
-- **Dietary Restrictions & Food Interactions:** Retrieve crucial rules regarding food intake (e.g., fasting/meals requirements, antacid timing, and food/supplement exclusions like grapefruit or St. John's Wort).
-- **RAG-based Medical Guidelines Search:** Queries an embedded vector store populated with official medical guidelines (`cml_guide.pdf`) using ChromaDB.
-- **Streamlined Patient UI:** A clean, simplified chat interface that hides complex agent reasoning (tool calls and thinking cycles) to deliver clean, direct medical assistant responses.
+### Chat Assistant
+- **TKI Info Lookup:** Side effects and clinical red flags for all major TKIs (Imatinib, Dasatinib, Nilotinib, Bosutinib, Ponatinib, Asciminib).
+- **Dietary Interactions:** Food rules, fasting requirements, antacid timing, and supplement exclusions.
+- **Medical Guidelines Search:** RAG-based search over the official CML guidelines PDF using ChromaDB.
+- **Wikipedia Fallback:** General CML/leukemia knowledge when PDF results are insufficient.
+- **Streaming Responses:** Real-time token-by-token chat via WebSocket.
+- **Patient Lab Data Access:** Chatbot retrieves your actual lab results to answer questions about your progress.
+
+### Lab Tracker
+- **Manual Entry:** Add lab results (BCR-ABL1, WBC, platelets, hemoglobin) via form dialog.
+- **File Upload:** Import CSV or PDF lab reports with preview and validation before committing.
+- **Dashboard:** Summary cards showing latest values, current TKI, and total results.
+- **Trend Charts:** Logarithmic BCR-ABL1 chart and CBC trend charts using MUI X Charts.
+- **Treatment Timeline:** Visual timeline of TKI history with current treatment badge.
+- **Milestone Tracking:** CCyR, MMR, MR4, MR4.5 achievement cards.
+- **Warning System:** Automatic alerts for rising BCR-ABL1, loss of MMR/CCyR, severe neutropenia, thrombocytopenia, anemia, and stale data.
+- **Data Encryption:** Fernet encryption for lab values at rest.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 19, TypeScript 6, Vite 8, MUI 6, MUI X Charts, react-router-dom |
+| Backend | Python 3.12, FastAPI, WebSocket, SQLite |
+| AI | Gemini API (google-genai), ChromaDB for RAG |
+| Encryption | Fernet symmetric (cryptography) |
+| Containerization | Docker, Docker Compose |
 
 ---
 
 ## Project Structure
 
 ```
-├── agent/
-│   ├── .env                       # API key and model configuration
-│   ├── agent.py                   # ReAct Agent logic & CLI interface
-│   ├── chroma_db/                 # Persistent Chroma DB directory (vector store)
-│   └── tools/                     # Modular package containing all tools
-│       ├── __init__.py            # Exposes all tool functions
-│       ├── tki_info.py            # lookup_tki_info (side effects & red flags)
-│       ├── food_rules.py          # lookup_food_interactions (dietary restrictions)
-│       ├── rag_search.py          # search_medical_guidelines (RAG search tool)
-│       └── wiki_search.py         # search_wikipedia (Wikipedia fallback)
-├── app.py                         # Streamlit web application
-├── cml_guide.pdf                  # Reference PDF guidelines
-├── requirements.txt               # Project dependencies
-└── README.md                      # Documentation
+├── backend/
+│   ├── api/
+│   │   ├── main.py              # FastAPI app entry point
+│   │   ├── routes.py            # Session CRUD endpoints
+│   │   ├── lab_routes.py        # Lab results, treatments, upload, dashboard endpoints
+│   │   ├── upload_parser.py     # CSV and PDF parsing
+│   │   └── websocket.py         # WebSocket chat handler with Gemini streaming
+│   ├── agent/
+│   │   ├── agent.py             # Gemini client setup and tools
+│   │   └── tools/               # Tool implementations
+│   │       ├── tki_info.py
+│   │       ├── food_rules.py
+│   │       ├── rag_search.py
+│   │       └── wiki_search.py
+│   ├── database.py              # SQLite operations (sessions, messages, lab_results, treatments, milestones)
+│   ├── encryption.py            # Fernet encrypt/decrypt for lab values
+│   ├── lab_warnings.py          # Trend analysis and warning generation
+│   ├── requirements.txt
+│   └── Dockerfile
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx              # Main layout with sidebar, chat, and dashboard routing
+│   │   ├── main.tsx             # Entry point with ThemeProvider and BrowserRouter
+│   │   ├── pages/
+│   │   │   └── Dashboard.tsx    # Lab tracker dashboard
+│   │   ├── components/
+│   │   │   ├── ChatMessage.tsx
+│   │   │   ├── ChatInput.tsx
+│   │   │   ├── Sidebar.tsx
+│   │   │   ├── ThemeToggle.tsx
+│   │   │   ├── LabResultsChart.tsx
+│   │   │   ├── CBCChart.tsx
+│   │   │   ├── TreatmentTimeline.tsx
+│   │   │   ├── MilestoneCards.tsx
+│   │   │   ├── DataEntryDialog.tsx
+│   │   │   ├── FileUploadDialog.tsx
+│   │   │   └── WarningBanner.tsx
+│   │   └── theme/
+│   │       └── ThemeProvider.tsx # Dark/light mode with MUI theme
+│   ├── package.json
+│   └── Dockerfile
+├── cml_guide.pdf                 # Medical guidelines for RAG
+├── docker-compose.yml
+├── .env.example
+└── README.md
 ```
 
 ---
 
 ## Setup Instructions
 
-### 1. Install Dependencies
-Make sure you have Python 3.9+ installed, then run:
+### 1. Backend
+
 ```bash
+cd backend
+python -m venv venv
+# Windows
+venv\Scripts\activate
+# macOS/Linux
+source venv/bin/activate
+
 pip install -r requirements.txt
 ```
 
-### 2. Configure API Key and Model
-Create or edit the `.env` file inside the `agent` folder and configure your Gemini API Key and model name:
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemma-4
+### 2. Frontend
+
+```bash
+cd frontend
+npm install
 ```
 
-### 3. Ingest Guidelines PDF
-To load and index the medical guidelines (`cml_guide.pdf`) into the Chroma vector database, run:
-```bash
-python agent/tools/rag_search.py
+### 3. Configure Environment
+
+Copy `.env.example` to `.env` in the project root and fill in your Gemini API key:
+
+```env
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemma-4-31b-it
+ENCRYPTION_KEY=your-fernet-key-here
 ```
-*(This splits the PDF into text chunks, generates vector embeddings, and persists them locally inside the `agent/chroma_db` directory).*
+
+Generate a Fernet key with:
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+### 4. Ingest Guidelines PDF (one-time)
+
+```bash
+cd backend
+python -c "from agent.tools.rag_search import *; # triggers ChromaDB indexing"
+```
 
 ---
 
-## Running the Application
+## Running Locally
 
-### Option A: Streamlit Web UI (Recommended)
-Start the web interface using:
+### Backend
 ```bash
-streamlit run app.py
+cd backend
+uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-Open `http://localhost:8501` in your browser to interact with the assistant.
+API docs available at `http://localhost:8000/docs`.
 
-### Option B: CLI Interactive Chat
-You can also run the agent interface directly in the command line:
+### Frontend
 ```bash
-python agent/agent.py
+cd frontend
+npm run dev
 ```
+Open `http://localhost:5173` in your browser.
+
+---
+
+## Running with Docker
+
+```bash
+docker-compose up --build
+```
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:8000`
+
+---
+
+## Medical Disclaimer
+
+This application is for informational and tracking support only. It does not replace professional medical diagnosis, advice, or treatment. Always consult your hematologist or oncologist before making any changes to your treatment plan.
