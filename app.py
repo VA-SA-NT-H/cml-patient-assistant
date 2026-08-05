@@ -1,9 +1,12 @@
 import streamlit as st
 import json
+import os
 
 # 1. IMPORT YOUR EXISTING TOOLS (The beauty of modular code!)
-from agent.agent import client, generate_content_with_retry, lookup_tki_info, lookup_food_interactions
-from agent.rag_tool import search_medical_guidelines
+from agent.agent import (
+    client, model_name, generate_content_with_retry,
+    lookup_tki_info, lookup_food_interactions, search_wikipedia, search_medical_guidelines
+)
 
 # Set up the page UI
 st.set_page_config(page_title="CML Assistant", page_icon="🩺")
@@ -16,15 +19,16 @@ st.markdown("Ask me about side effects, food interactions, or CML guidelines.")
 # We store the raw string for the LLM's brain
 if "conversation_history" not in st.session_state:
     st.session_state.conversation_history = """
-    You are a medical assistant for CML patients. You have access to THREE tools. 
+    You are a medical assistant for CML patients. You have access to FOUR tools. 
     Depending on what the user asks, reply with ONLY a JSON object to trigger the correct tool:
 
     1. To look up side effects or red flags: {"tool": "lookup_tki_info", "drug_name": "name"}
     2. To look up dietary restrictions: {"tool": "lookup_food_interactions", "drug_name": "name"}
-    3. To answer general guideline questions: {"tool": "search_medical_guidelines", "search_query": "query"}
+    3. To search the official medical guidelines PDF: {"tool": "search_medical_guidelines", "search_query": "query"}
+    4. To look up general knowledge ONLY IF the guidelines PDF does not contain the answer: {"tool": "search_wikipedia", "search_query": "query"}
     
     If you have the data, reply directly in plain text.
-    FORMATTING RULES: Use Markdown bullet points. Explicitly cite your source database/PDF at the end.
+    FORMATTING RULES: Use Markdown bullet points. Explicitly cite your exact source (e.g., "Source: Wikipedia" or "Source: Guidelines PDF") at the end.
     """
 
 # We store a cleaner list just to display the chat bubbles on the screen
@@ -56,7 +60,7 @@ if user_question := st.chat_input("Ask a question about your medication..."):
             for step in range(3):
                 response = generate_content_with_retry(
                     client=client,
-                    model='gemini-3.6-flash',
+                    model=model_name,
                     contents=st.session_state.conversation_history
                 )
                 
@@ -87,7 +91,13 @@ if user_question := st.chat_input("Ask a question about your medication..."):
                             tool_result = search_medical_guidelines(query)
                             st.session_state.conversation_history += f"\n\nAgent Action: {clean_reply}\nTool Result: {tool_result}\nNow, based on this PDF data, provide the final response to the user. Remember to cite the PDF."
                         
-                        # ROUTE 4: Hallucinated Tool
+                        # ROUTE 4: Wikipedia Fallback
+                        elif tool_name == "search_wikipedia":
+                            query = action_data.get("search_query")
+                            tool_result = search_wikipedia(query)
+                            st.session_state.conversation_history += f"\n\nAgent Action: {clean_reply}\nTool Result: {tool_result}\nNow, based on this Wikipedia data, provide the final response. Cite Wikipedia as your source."
+                            
+                        # ROUTE 5: Hallucinated Tool
                         else:
                             st.session_state.conversation_history += f"\n\nSystem Error: Tool '{tool_name}' does not exist. Try again."
                             continue
