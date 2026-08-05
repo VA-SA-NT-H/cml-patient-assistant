@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Box, Typography } from '@mui/material';
+import { Typography, Chip } from '@mui/material';
+import { Timeline, TimelineItem, TimelineSeparator, TimelineConnector, TimelineDot, TimelineContent } from '@mui/lab';
 
 interface Treatment {
   id: number;
@@ -29,15 +30,26 @@ export const TreatmentTimeline = () => {
   }
 
   return (
-    <Box>
-      {treatments.map(t => (
-        <Box key={t.id} sx={{ mb: 1 }}>
-          <Typography variant="subtitle2">{t.drug_name} {t.dosage_mg}mg</Typography>
-          <Typography variant="caption" color="text.secondary">
-            {t.start_date} — {t.end_date || 'present'}
-          </Typography>
-        </Box>
+    <Timeline position="left">
+      {treatments.map((t, i) => (
+        <TimelineItem key={t.id}>
+          <TimelineSeparator>
+            <TimelineDot color={t.end_date === null ? 'primary' : 'grey'} />
+            {i < treatments.length - 1 && <TimelineConnector />}
+          </TimelineSeparator>
+          <TimelineContent>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+              {t.drug_name} {t.dosage_mg}mg
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {t.start_date} — {t.end_date || 'present'}
+            </Typography>
+            {t.end_date === null && (
+              <Chip size="small" label="Current" color="primary" sx={{ ml: 1 }} />
+            )}
+          </TimelineContent>
+        </TimelineItem>
       ))}
-    </Box>
+    </Timeline>
   );
 };
