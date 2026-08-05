@@ -9,7 +9,23 @@ load_dotenv()
 
 app = FastAPI(
     title="CML Assistant API",
-    description="API for CML Patient Assistant",
+    description="""
+    API for CML Patient Assistant
+    
+    ## Features
+    - Session management (CRUD)
+    - Real-time chat via WebSocket
+    - Tool calling for medical information
+    
+    ## WebSocket
+    Connect to `/ws/chat` for real-time streaming responses.
+    
+    ### Messages
+    - `{"type": "chat", "session_id": "...", "message": "..."}` - Send chat message
+    - `{"type": "token", "content": "..."}` - Receive streaming token
+    - `{"type": "tool_call", "tool": "...", "args": {...}}` - Tool execution
+    - `{"type": "complete", "full_response": "..."}` - Response complete
+    """,
     version="1.0.0"
 )
 
