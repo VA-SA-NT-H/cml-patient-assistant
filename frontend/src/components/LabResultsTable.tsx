@@ -3,6 +3,7 @@ import { Box, Typography, Card, CardContent, IconButton, Tooltip, Dialog, Dialog
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { apiClient } from '../api';
+import { formatDate } from '../utils/formatDate';
 
 interface LabResult {
   id: number;
@@ -152,7 +153,7 @@ export const LabResultsTable = ({ refreshKey = 0, onRefresh }: Props) => {
                         {r.unit}
                       </Typography>
                     </Box>
-                    <Box component="td" color="text.secondary">{r.test_date}</Box>
+                    <Box component="td" color="text.secondary">{formatDate(r.test_date)}</Box>
                     <Box component="td" color="text.secondary" sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {r.notes || '—'}
                     </Box>

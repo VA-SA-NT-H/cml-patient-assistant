@@ -122,25 +122,35 @@ def init_db():
             value_at_achievement TEXT
         )
     ''')
-    conn.commit()
-    conn.close()
-    
-    # Ensure default milestones exist
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    default_milestones = ['ccyr', 'mmr', 'mr4', 'mr4_5']
-    for m in default_milestones:
-        cursor.execute("SELECT 1 FROM milestones WHERE milestone_type = ?", (m,))
-        if not cursor.fetchone():
-            cursor.execute(
-                "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement) VALUES (?, 0, NULL, NULL)",
-                (m,)
-            )
+
+    # Table for checkup records
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS checkup_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            checkup_date TEXT NOT NULL,
+            doctor_advice TEXT,
+            medications_bought TEXT,
+            medication_cost TEXT,
+            created_at TEXT NOT NULL
+        )
+    ''')
+
+    # Table for user settings
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_settings (
+            key TEXT NOT NULL,
+            value TEXT NOT NULL,
+            user_id TEXT REFERENCES users(user_id),
+            PRIMARY KEY (key, user_id)
+        )
+    ''')
     conn.commit()
     conn.close()
     
     # Run migration to add user_id columns
     migrate_add_user_id()
+    migrate_checkup_records()
+    migrate_user_settings()
 
 def migrate_add_user_id():
     """Add user_id column to all data tables if not exists."""
@@ -149,28 +159,61 @@ def migrate_add_user_id():
     
     # Check if user_id column exists in sessions
     cursor.execute("PRAGMA table_info(sessions)")
-    columns = [row[1] for row in cursor.fetchall()]
+    columns = [col[1] for col in cursor.fetchall()]
     if "user_id" not in columns:
         cursor.execute("ALTER TABLE sessions ADD COLUMN user_id TEXT REFERENCES users(user_id)")
     
     # Check if user_id column exists in lab_results
     cursor.execute("PRAGMA table_info(lab_results)")
-    columns = [row[1] for row in cursor.fetchall()]
+    columns = [col[1] for col in cursor.fetchall()]
     if "user_id" not in columns:
         cursor.execute("ALTER TABLE lab_results ADD COLUMN user_id TEXT REFERENCES users(user_id)")
     
     # Check if user_id column exists in treatments
     cursor.execute("PRAGMA table_info(treatments)")
-    columns = [row[1] for row in cursor.fetchall()]
+    columns = [col[1] for col in cursor.fetchall()]
     if "user_id" not in columns:
         cursor.execute("ALTER TABLE treatments ADD COLUMN user_id TEXT REFERENCES users(user_id)")
     
     # Check if user_id column exists in milestones
     cursor.execute("PRAGMA table_info(milestones)")
-    columns = [row[1] for row in cursor.fetchall()]
+    columns = [col[1] for col in cursor.fetchall()]
     if "user_id" not in columns:
         cursor.execute("ALTER TABLE milestones ADD COLUMN user_id TEXT REFERENCES users(user_id)")
     
+    # Check if user_id column exists in checkup_records
+    cursor.execute("PRAGMA table_info(checkup_records)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "user_id" not in columns:
+        cursor.execute("ALTER TABLE checkup_records ADD COLUMN user_id TEXT REFERENCES users(user_id)")
+    
+    conn.commit()
+    conn.close()
+
+def migrate_checkup_records():
+    """Ensure checkup_records has correct column names."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(checkup_records)")
+    columns = [col[1] for col in cursor.fetchall()]
+    # Rename old 'medications' column to 'medications_bought' if needed
+    if "medications" in columns and "medications_bought" not in columns:
+        cursor.execute("ALTER TABLE checkup_records RENAME COLUMN medications TO medications_bought")
+        columns = ["medications_bought" if c == "medications" else c for c in columns]
+    # Add medication_cost column if missing
+    if "medication_cost" not in columns:
+        cursor.execute("ALTER TABLE checkup_records ADD COLUMN medication_cost TEXT")
+    conn.commit()
+    conn.close()
+
+def migrate_user_settings():
+    """Ensure user_settings has user_id column."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA table_info(user_settings)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "user_id" not in columns:
+        cursor.execute("ALTER TABLE user_settings ADD COLUMN user_id TEXT REFERENCES users(user_id)")
     conn.commit()
     conn.close()
 
@@ -379,23 +422,47 @@ def delete_treatment(row_id: int):
     conn.close()
 
 
-def delete_all_lab_data():
-    """Delete all lab results and treatments. Used for dashboard reset."""
+def delete_all_lab_data(user_id: str = None):
+    """Delete all lab results, treatments, milestones, settings, checkup records, and sessions for a user."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM lab_results")
-    cursor.execute("DELETE FROM treatments")
-    cursor.execute("DELETE FROM milestones")
+    if user_id:
+        cursor.execute("DELETE FROM lab_results WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM treatments WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM milestones WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM user_settings WHERE user_id = ?", (user_id,))
+        cursor.execute("DELETE FROM checkup_records WHERE user_id = ?", (user_id,))
+        # Delete sessions and their messages for this user
+        cursor.execute("SELECT session_id FROM sessions WHERE user_id = ?", (user_id,))
+        session_ids = [row[0] for row in cursor.fetchall()]
+        if session_ids:
+            placeholders = ','.join('?' * len(session_ids))
+            cursor.execute(f"DELETE FROM messages WHERE session_id IN ({placeholders})", session_ids)
+        cursor.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+    else:
+        cursor.execute("DELETE FROM lab_results")
+        cursor.execute("DELETE FROM treatments")
+        cursor.execute("DELETE FROM milestones")
+        cursor.execute("DELETE FROM user_settings")
+        cursor.execute("DELETE FROM checkup_records")
+        cursor.execute("DELETE FROM messages")
+        cursor.execute("DELETE FROM sessions")
     conn.commit()
     conn.close()
     # Re-initialize default milestones
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     for m in ['ccyr', 'mmr', 'mr4', 'mr4_5']:
-        cursor.execute(
-            "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement) VALUES (?, 0, NULL, NULL)",
-            (m,)
-        )
+        if user_id:
+            cursor.execute(
+                "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement, user_id) VALUES (?, 0, NULL, NULL, ?)",
+                (m, user_id)
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement) VALUES (?, 0, NULL, NULL)",
+                (m,)
+            )
     conn.commit()
     conn.close()
 
@@ -449,5 +516,109 @@ def update_milestone(milestone_type: str, achieved: bool, achieved_date: str = N
         "UPDATE milestones SET achieved = ?, achieved_date = ?, value_at_achievement = ? WHERE milestone_type = ?",
         (1 if achieved else 0, achieved_date, value_at_achievement, milestone_type)
     )
+    conn.commit()
+    conn.close()
+
+
+# ==========================================
+# CHECKUP RECORDS
+# ==========================================
+
+def save_checkup_record(checkup_date: str, doctor_advice: str = None,
+                        medications_bought: str = None, medication_cost: str = None,
+                        user_id: str = None) -> int:
+    """Save a checkup record. Returns the new row ID."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO checkup_records (checkup_date, doctor_advice, medications_bought, medication_cost, created_at, user_id) VALUES (?, ?, ?, ?, ?, ?)",
+        (checkup_date, doctor_advice, medications_bought, medication_cost,
+         datetime.now().strftime("%Y-%m-%d %H:%M"), user_id)
+    )
+    row_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return row_id
+
+
+def get_checkup_records(user_id: str = None):
+    """Retrieve all checkup records. Optional filter by user_id."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    if user_id:
+        cursor.execute("SELECT id, checkup_date, doctor_advice, medications_bought, medication_cost, created_at FROM checkup_records WHERE user_id = ? ORDER BY checkup_date DESC", (user_id,))
+    else:
+        cursor.execute("SELECT id, checkup_date, doctor_advice, medications_bought, medication_cost, created_at FROM checkup_records ORDER BY checkup_date DESC")
+    rows = cursor.fetchall()
+    conn.close()
+    return [
+        {"id": r[0], "checkup_date": r[1], "doctor_advice": r[2],
+         "medications_bought": r[3], "medication_cost": r[4], "created_at": r[5]}
+        for r in rows
+    ]
+
+
+def update_checkup_record(record_id: int, checkup_date: str = None,
+                          doctor_advice: str = None, medications_bought: str = None,
+                          medication_cost: str = None):
+    """Update a checkup record."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    updates = {}
+    if checkup_date is not None:
+        updates["checkup_date"] = checkup_date
+    if doctor_advice is not None:
+        updates["doctor_advice"] = doctor_advice
+    if medications_bought is not None:
+        updates["medications_bought"] = medications_bought
+    if medication_cost is not None:
+        updates["medication_cost"] = medication_cost
+    if updates:
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        cursor.execute(f"UPDATE checkup_records SET {set_clause} WHERE id = ?", (*updates.values(), record_id))
+    conn.commit()
+    conn.close()
+
+
+def delete_checkup_record(record_id: int):
+    """Delete a checkup record."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM checkup_records WHERE id = ?", (record_id,))
+    conn.commit()
+    conn.close()
+
+
+# ==========================================
+# USER SETTINGS
+# ==========================================
+
+def get_setting(key: str, user_id: str = None) -> str | None:
+    """Get a user setting by key. Optional filter by user_id."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    if user_id:
+        cursor.execute("SELECT value FROM user_settings WHERE key = ? AND user_id = ?", (key, user_id))
+    else:
+        cursor.execute("SELECT value FROM user_settings WHERE key = ?", (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else None
+
+
+def save_setting(key: str, value: str, user_id: str = None):
+    """Save or update a user setting."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    if user_id:
+        cursor.execute(
+            "INSERT OR REPLACE INTO user_settings (key, value, user_id) VALUES (?, ?, ?)",
+            (key, value, user_id)
+        )
+    else:
+        cursor.execute(
+            "INSERT OR REPLACE INTO user_settings (key, value) VALUES (?, ?)",
+            (key, value)
+        )
     conn.commit()
     conn.close()

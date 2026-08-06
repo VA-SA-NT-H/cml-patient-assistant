@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Typography, Chip } from '@mui/material';
 import { Timeline, TimelineItem, TimelineSeparator, TimelineConnector, TimelineDot, TimelineContent } from '@mui/lab';
 import { apiClient } from '../api';
+import { formatDate } from '../utils/formatDate';
 
 interface Treatment {
   id: number;
@@ -44,7 +45,7 @@ export const TreatmentTimeline = () => {
               {t.drug_name} {t.dosage_mg}mg
             </Typography>
             <Typography variant="caption" color="text.secondary">
-              {t.start_date} — {t.end_date || 'present'}
+              {formatDate(t.start_date)} — {t.end_date ? formatDate(t.end_date) : 'present'}
             </Typography>
             {t.end_date === null && (
               <Chip size="small" label="Current" color="primary" sx={{ ml: 1 }} />

@@ -8,7 +8,7 @@ import asyncio
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from agent.agent import client, model_name
 from agent.tools import lookup_tki_info, lookup_food_interactions, search_medical_guidelines, search_wikipedia
-from database import save_message
+from database import save_message, get_session_messages
 from google.genai import types
 from datetime import datetime, timedelta
 
@@ -278,8 +278,21 @@ async def chat_websocket(websocket: WebSocket, user_id: str):
                 if session_id and user_message:
                     save_message(session_id, "user", user_message)
                 
-                # Build conversation history (simplified for now)
-                contents = [user_message]
+                # Build conversation history from database
+                contents = []
+                if session_id:
+                    history = get_session_messages(session_id)
+                    for msg in history:
+                        role = "user" if msg["role"] == "user" else "model"
+                        contents.append(types.Content(
+                            role=role,
+                            parts=[types.Part.from_text(text=msg["content"])]
+                        ))
+                else:
+                    contents.append(types.Content(
+                        role="user",
+                        parts=[types.Part.from_text(text=user_message)]
+                    ))
                 
                 # Process with Gemini
                 config = types.GenerateContentConfig(

@@ -2,6 +2,7 @@ from fastapi import FastAPI, WebSocket, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from starlette.middleware.sessions import SessionMiddleware
 import os
 import logging
 from dotenv import load_dotenv
@@ -39,6 +40,9 @@ app = FastAPI(
     """,
     version="1.0.0"
 )
+
+# Session middleware for OAuth
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("JWT_SECRET", "dev-secret"))
 
 # CORS for React frontend
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")

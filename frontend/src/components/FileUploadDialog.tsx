@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip } from '@mui/material';
 import { apiClient } from '../api';
+import { formatDate } from '../utils/formatDate';
 
 interface ParsedRow {
   test_type: string;
@@ -113,7 +114,7 @@ export const FileUploadDialog = ({ open, onClose, onSaved }: Props) => {
                         <Chip size="small" label="Error" color="error" />
                       )}
                     </TableCell>
-                    <TableCell>{row.test_date}</TableCell>
+                    <TableCell>{formatDate(row.test_date)}</TableCell>
                     <TableCell>{row.test_type}</TableCell>
                     <TableCell>{row.value}</TableCell>
                     <TableCell>{row.unit}</TableCell>

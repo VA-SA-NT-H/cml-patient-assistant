@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { LineChart } from '@mui/x-charts/LineChart';
 import { Box, Typography } from '@mui/material';
+import { apiClient } from '../api';
 
 interface LabResult {
   value: string;
@@ -19,7 +20,7 @@ export const CBCChart = ({ testType, title }: Props) => {
 
   const fetchData = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/lab-results?test_type=${testType}`);
+      const response = await apiClient.get(`/api/lab-results?test_type=${testType}`);
       const results = await response.json();
       setData(results);
     } catch (error) {

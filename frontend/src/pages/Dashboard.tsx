@@ -11,13 +11,15 @@ import MedicalServicesIcon from '@mui/icons-material/MedicalServices';
 import { LabResultsChart } from '../components/LabResultsChart';
 import { CBCResults } from '../components/CBCResults';
 import { TreatmentTimeline } from '../components/TreatmentTimeline';
+import { LabSummaryTable } from '../components/LabSummaryTable';
 import { MilestoneCards } from '../components/MilestoneCards';
 import { WarningBanner } from '../components/WarningBanner';
+import { formatDate } from '../utils/formatDate';
 import { DataEntryDialog } from '../components/DataEntryDialog';
 import { TreatmentEntryDialog } from '../components/TreatmentEntryDialog';
 import { FileUploadDialog } from '../components/FileUploadDialog';
-import { OtherResults } from '../components/OtherResults';
-import { LabResultsTable } from '../components/LabResultsTable';
+import { CheckupRecords } from '../components/CheckupRecords';
+import { NextCheckup } from '../components/NextCheckup';
 import { useTheme } from '../theme/ThemeProvider';
 import { apiClient } from '../api';
 
@@ -200,6 +202,11 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
       {/* ── Warnings ── */}
       {data.warnings.length > 0 && <WarningBanner warnings={data.warnings} />}
 
+      {/* ── Next Checkup ── */}
+      <Box sx={{ mb: 3 }}>
+        <NextCheckup />
+      </Box>
+
       {/* ── Thesis: BCR-ABL1 ── */}
       <Card
         elevation={0}
@@ -259,7 +266,7 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
                   sx={{ fontWeight: 500, fontSize: '0.7rem' }}
                 />
                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                  Last tested: {latestBCR.test_date}
+                  Last tested: {formatDate(latestBCR.test_date)}
                 </Typography>
               </Box>
             )}
@@ -304,21 +311,36 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
       <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2 }}>
         <Card elevation={0}>
           <CardContent sx={{ p: 2.5 }}>
-            <CBCResults testType="cbc_wbc" title="White Blood Cells" unit="K/µL" />
-          </CardContent>
-        </Card>
-        <Card elevation={0}>
-          <CardContent sx={{ p: 2.5 }}>
             <CBCResults testType="cbc_platelets" title="Platelets" unit="K/µL" />
           </CardContent>
         </Card>
-      </Box>
-      <Box sx={{ mb: 4 }}>
         <Card elevation={0}>
           <CardContent sx={{ p: 2.5 }}>
             <CBCResults testType="cbc_hemoglobin" title="Hemoglobin" unit="g/dL" />
           </CardContent>
         </Card>
+      </Box>
+      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 4 }}>
+        <Card elevation={0}>
+          <CardContent sx={{ p: 2.5 }}>
+            <CBCResults testType="cbc_wbc" title="White Blood Cells" unit="K/µL" />
+          </CardContent>
+        </Card>
+        <Card elevation={0}>
+          <CardContent sx={{ p: 2.5 }}>
+            <CBCResults testType="cbc_rbc" title="Red Blood Cells" unit="M/µL" />
+          </CardContent>
+        </Card>
+      </Box>
+
+      {/* ── Lab Summary Table ── */}
+      <Box sx={{ mb: 4 }}>
+        <LabSummaryTable refreshKey={refreshKey} onRefresh={fetchDashboard} />
+      </Box>
+
+      {/* ── Checkup Records ── */}
+      <Box sx={{ mb: 4 }}>
+        <CheckupRecords />
       </Box>
 
       {/* ── Treatment History ── */}
@@ -348,12 +370,6 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
         Milestones
       </Typography>
       <MilestoneCards milestones={data.milestones} />
-
-      {/* ── Other Results ── */}
-      <OtherResults />
-
-      {/* ── All Lab Results ── */}
-      <LabResultsTable refreshKey={refreshKey} onRefresh={fetchDashboard} />
 
       {/* ── Disclaimer ── */}
       <Box
