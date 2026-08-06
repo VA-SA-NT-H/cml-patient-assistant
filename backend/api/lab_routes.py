@@ -8,7 +8,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from database import (
     save_lab_result, get_lab_results, update_lab_result, delete_lab_result,
     save_treatment, get_treatments, update_treatment, delete_treatment,
-    get_milestones, delete_all_lab_data
+    get_milestones, delete_all_lab_data,
+    save_checkup_record, get_checkup_records, update_checkup_record, delete_checkup_record,
+    get_setting, save_setting
 )
 from api.upload_parser import parse_csv, parse_pdf, parse_image
 from lab_warnings import check_trends
@@ -78,21 +80,21 @@ def recalculate_milestones(user_id: str = None):
                     print(f"[milestones] Failed to parse '{latest_result['value']}': {e}")
 
             cursor.execute(
-                "SELECT id FROM milestones WHERE milestone_type = ?",
-                (milestone_type,)
+                "SELECT id FROM milestones WHERE milestone_type = ? AND user_id = ?",
+                (milestone_type, user_id)
             )
             existing = cursor.fetchone()
 
             if existing:
                 cursor.execute(
-                    "UPDATE milestones SET achieved = ?, achieved_date = ?, value_at_achievement = ? WHERE milestone_type = ?",
-                    (1 if achieved else 0, achieved_date, achieved_value, milestone_type)
+                    "UPDATE milestones SET achieved = ?, achieved_date = ?, value_at_achievement = ? WHERE milestone_type = ? AND user_id = ?",
+                    (1 if achieved else 0, achieved_date, achieved_value, milestone_type, user_id)
                 )
                 print(f"[milestones] Updated {milestone_type}: achieved={achieved}")
             else:
                 cursor.execute(
-                    "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement) VALUES (?, ?, ?, ?)",
-                    (milestone_type, 1 if achieved else 0, achieved_date, achieved_value)
+                    "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement, user_id) VALUES (?, ?, ?, ?, ?)",
+                    (milestone_type, 1 if achieved else 0, achieved_date, achieved_value, user_id)
                 )
                 print(f"[milestones] Inserted {milestone_type}: achieved={achieved}")
 
@@ -347,10 +349,87 @@ async def debug_milestones():
     }
 
 
+# ==========================================
+# CHECKUP RECORDS
+# ==========================================
+
+class CheckupRecordCreate(BaseModel):
+    checkup_date: str
+    doctor_advice: Optional[str] = None
+    medications_bought: Optional[str] = None
+    medication_cost: Optional[str] = None
+
+
+class CheckupRecordUpdate(BaseModel):
+    checkup_date: Optional[str] = None
+    doctor_advice: Optional[str] = None
+    medications_bought: Optional[str] = None
+    medication_cost: Optional[str] = None
+
+
+class CheckupRecordResponse(BaseModel):
+    id: int
+    checkup_date: str
+    doctor_advice: Optional[str]
+    medications_bought: Optional[str]
+    medication_cost: Optional[str]
+    created_at: str
+
+
+@router.get("/checkup-records", response_model=List[CheckupRecordResponse])
+async def list_checkup_records(user_id: str = Depends(get_current_user)):
+    return get_checkup_records(user_id=user_id)
+
+
+@router.post("/checkup-records", response_model=CheckupRecordResponse)
+async def create_checkup_record(data: CheckupRecordCreate, user_id: str = Depends(get_current_user)):
+    row_id = save_checkup_record(
+        checkup_date=data.checkup_date,
+        doctor_advice=data.doctor_advice,
+        medications_bought=data.medications_bought,
+        medication_cost=data.medication_cost,
+        user_id=user_id,
+    )
+    records = get_checkup_records(user_id=user_id)
+    return next(r for r in records if r["id"] == row_id)
+
+
+@router.put("/checkup-records/{record_id}")
+async def update_checkup(record_id: int, data: CheckupRecordUpdate):
+    update_checkup_record(
+        record_id=record_id,
+        checkup_date=data.checkup_date,
+        doctor_advice=data.doctor_advice,
+        medications_bought=data.medications_bought,
+        medication_cost=data.medication_cost,
+    )
+    return {"message": "Updated"}
+
+
+@router.delete("/checkup-records/{record_id}")
+async def delete_checkup(record_id: int):
+    delete_checkup_record(record_id)
+    return {"message": "Deleted"}
+
+
+# ==========================================
+# USER SETTINGS
+# ==========================================
+
+@router.get("/settings/{key}")
+async def get_user_setting(key: str, user_id: str = Depends(get_current_user)):
+    value = get_setting(key, user_id=user_id)
+    return {"key": key, "value": value}
+
+
+@router.post("/settings")
+async def save_user_setting(key: str, value: str, user_id: str = Depends(get_current_user)):
+    save_setting(key, value, user_id=user_id)
+    return {"message": "Saved"}
+
+
 @router.delete("/reset")
 async def reset_dashboard(user_id: str = Depends(get_current_user)):
-    """Delete all lab results, treatments, and milestones for current user."""
-    # Note: This currently deletes ALL data, not just user's data
-    # For proper isolation, we'd need to filter by user_id
-    delete_all_lab_data()
+    """Delete all lab results, treatments, milestones, settings, checkup records, and sessions for current user."""
+    delete_all_lab_data(user_id=user_id)
     return {"message": "All data deleted"}

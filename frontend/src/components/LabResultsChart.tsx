@@ -3,7 +3,10 @@ import { Box, Typography, Chip } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ErrorIcon from '@mui/icons-material/Error';
+import { BarChart } from '@mui/x-charts/BarChart';
 import { useTheme } from '../theme/ThemeProvider';
+import { apiClient } from '../api';
+import { formatDate } from '../utils/formatDate';
 
 interface LabResult {
   value: string;
@@ -68,15 +71,6 @@ const getZone = (value: number): ZoneInfo => {
   };
 };
 
-// Positions for the zone markers on the bar (log scale mapped to 0-100%)
-const getMarkerPosition = (value: number): number => {
-  if (value <= 0) return 0;
-  const logMin = Math.log10(0.001);
-  const logMax = Math.log10(100);
-  const logVal = Math.log10(Math.max(value, 0.001));
-  return Math.max(0, Math.min(100, ((logVal - logMin) / (logMax - logMin)) * 100));
-};
-
 const ZONES = [
   { label: '100%', pos: 100 },
   { label: '10%', pos: 75 },
@@ -85,6 +79,14 @@ const ZONES = [
   { label: '0.01%', pos: 17 },
   { label: '0%', pos: 0 },
 ];
+
+const getMarkerPosition = (value: number): number => {
+  if (value <= 0) return 0;
+  const logMin = Math.log10(0.001);
+  const logMax = Math.log10(100);
+  const logVal = Math.log10(Math.max(value, 0.001));
+  return Math.max(0, Math.min(100, ((logVal - logMin) / (logMax - logMin)) * 100));
+};
 
 export const LabResultsChart = ({ testType }: Props) => {
   const [data, setData] = useState<LabResult[]>([]);
@@ -96,7 +98,7 @@ export const LabResultsChart = ({ testType }: Props) => {
 
   const fetchData = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/lab-results?test_type=${testType}`);
+      const response = await apiClient.get(`/api/lab-results?test_type=${testType}`);
       const results = await response.json();
       setData(results);
     } catch (error) {
@@ -131,7 +133,6 @@ export const LabResultsChart = ({ testType }: Props) => {
   const zone = getZone(latestValue);
   const markerPos = getMarkerPosition(latestValue);
 
-  // Determine trend from last 2 results
   let trend: 'improving' | 'stable' | 'rising' | null = null;
   if (data.length >= 2) {
     const prev = parseFloat(data[data.length - 2].value);
@@ -140,6 +141,24 @@ export const LabResultsChart = ({ testType }: Props) => {
     else if (diff > 0.001) trend = 'rising';
     else trend = 'stable';
   }
+
+  // Prepare chart data
+  const xLabels = data.map(d => formatDate(d.test_date));
+  const yValues = data.map(d => parseFloat(d.value));
+
+  // Per-point colored series based on BCR-ABL zones
+  const bcrZones = [
+    { min: 0, max: 0.0032, color: '#16a34a' },
+    { min: 0.0032, max: 0.01, color: '#22c55e' },
+    { min: 0.01, max: 0.1, color: '#2A9D8F' },
+    { min: 0.1, max: 1, color: '#E9A23B' },
+    { min: 1, max: Infinity, color: '#D32F2F' },
+  ];
+
+  const coloredSeries = bcrZones.map(z => ({
+    color: z.color,
+    data: yValues.map(v => (v >= z.min && v < z.max) ? v : null),
+  })).filter(s => s.data.some(v => v !== null));
 
   return (
     <Box>
@@ -168,7 +187,15 @@ export const LabResultsChart = ({ testType }: Props) => {
           />
         </Box>
 
-        {/* The bar */}
+        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.75 }}>
+          <Typography variant="body2" sx={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 700 }}>
+            {latest.value}%
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+            {formatDate(latest.test_date)}
+          </Typography>
+        </Box>
+
         <Box
           sx={{
             position: 'relative',
@@ -181,7 +208,6 @@ export const LabResultsChart = ({ testType }: Props) => {
             opacity: 0.85,
           }}
         >
-          {/* Marker */}
           <Box
             sx={{
               position: 'absolute',
@@ -191,7 +217,6 @@ export const LabResultsChart = ({ testType }: Props) => {
               zIndex: 2,
             }}
           >
-            {/* Pointer triangle */}
             <Box
               sx={{
                 width: 0,
@@ -202,7 +227,6 @@ export const LabResultsChart = ({ testType }: Props) => {
                 mx: 'auto',
               }}
             />
-            {/* Value label */}
             <Box
               sx={{
                 bgcolor: mode === 'dark' ? '#fff' : '#000',
@@ -223,7 +247,6 @@ export const LabResultsChart = ({ testType }: Props) => {
           </Box>
         </Box>
 
-        {/* Zone labels */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.75 }}>
           {ZONES.map((z) => (
             <Typography
@@ -241,7 +264,6 @@ export const LabResultsChart = ({ testType }: Props) => {
           ))}
         </Box>
 
-        {/* Zone names */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.25 }}>
           <Typography variant="caption" sx={{ color: '#16a34a', fontSize: '0.55rem', opacity: 0.8 }}>
             Deep response
@@ -255,90 +277,44 @@ export const LabResultsChart = ({ testType }: Props) => {
         </Box>
       </Box>
 
-      {/* ── Recent Results Table ── */}
-      <Box>
-        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, display: 'block', mb: 1 }}>
-          Recent results
-        </Typography>
-        <Box
-          component="table"
-          sx={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            '& th, & td': {
-              py: 1,
-              px: 1.5,
-              textAlign: 'left',
-              fontSize: '0.8rem',
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-            },
-            '& th': {
-              fontWeight: 600,
-              color: 'text.secondary',
-              fontSize: '0.65rem',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-            },
-            '& td': {
-              fontFamily: '"JetBrains Mono", monospace',
-            },
-            '& tr:last-child td': {
-              borderBottom: 'none',
-            },
-          }}
-        >
-          <Box component="thead">
-            <Box component="tr">
-              <Box component="th">Date</Box>
-              <Box component="th">BCR-ABL1</Box>
-              <Box component="th">Status</Box>
-            </Box>
+      {/* ── Bar Chart ── */}
+      {data.length >= 2 && (
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, display: 'block', mb: 1 }}>
+            BCR-ABL1 trend
+          </Typography>
+          <Box sx={{ width: '100%', height: 220 }}>
+            <BarChart
+              xAxis={[{
+                data: xLabels,
+                scaleType: 'band',
+                tickLabelStyle: {
+                  fontSize: 10,
+                  fill: mode === 'dark' ? '#aaa' : '#666',
+                },
+              }]}
+              yAxis={[{
+                min: 0,
+                tickLabelStyle: {
+                  fontSize: 10,
+                  fill: mode === 'dark' ? '#aaa' : '#666',
+                },
+              }]}
+              series={coloredSeries.map(s => ({
+                data: s.data,
+                color: s.color,
+              }))}
+              height={220}
+              margin={{ top: 20, bottom: 30, left: 50, right: 20 }}
+            />
           </Box>
-          <Box component="tbody">
-            {[...data].reverse().slice(0, 8).map((result, i) => {
-              const val = parseFloat(result.value);
-              const z = getZone(val);
-              return (
-                <Box component="tr" key={i}>
-                  <Box component="td" sx={{ fontFamily: '"IBM Plex Sans", sans-serif' }}>
-                    {result.test_date}
-                  </Box>
-                  <Box component="td" sx={{ fontWeight: 500 }}>
-                    {result.value}%
-                  </Box>
-                  <Box component="td">
-                    <Box
-                      sx={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 0.5,
-                        px: 1,
-                        py: 0.25,
-                        borderRadius: 1,
-                        bgcolor: mode === 'dark' ? z.bgDark : z.bgLight,
-                        color: z.color,
-                        fontSize: '0.7rem',
-                        fontWeight: 500,
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: '50%',
-                          bgcolor: z.color,
-                        }}
-                      />
-                      {val <= 0.1 ? 'Good' : val <= 1 ? 'Watch' : 'Concern'}
-                    </Box>
-                  </Box>
-                </Box>
-              );
-            })}
+          <Box sx={{ display: 'flex', gap: 2, mt: 0.5, justifyContent: 'center' }}>
+            <Typography variant="caption" sx={{ fontSize: '0.6rem', color: '#2A9D8F' }}>
+              MMR threshold: ≤ 0.1%
+            </Typography>
           </Box>
         </Box>
-      </Box>
+      )}
 
       {/* ── Trend summary ── */}
       {trend && (

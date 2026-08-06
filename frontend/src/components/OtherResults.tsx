@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Box, Typography, Card, CardContent } from '@mui/material';
 import ScienceIcon from '@mui/icons-material/Science';
 import { apiClient } from '../api';
+import { formatDate } from '../utils/formatDate';
 
 interface LabResult {
   id: number;
@@ -69,7 +70,7 @@ export const OtherResults = () => {
                   {r.test_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {r.test_date}
+                  {formatDate(r.test_date)}
                   {r.notes && ` — ${r.notes}`}
                 </Typography>
               </Box>

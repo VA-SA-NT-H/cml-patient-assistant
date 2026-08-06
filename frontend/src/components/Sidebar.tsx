@@ -18,6 +18,8 @@ import {
   TextField,
   useMediaQuery,
   useTheme,
+  Avatar,
+  Tooltip,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import AddIcon from '@mui/icons-material/Add';
@@ -26,7 +28,10 @@ import ChatIcon from '@mui/icons-material/Chat';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import MedicalServicesIcon from '@mui/icons-material/MedicalServices';
+import LogoutIcon from '@mui/icons-material/Logout';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import { ThemeToggle } from './ThemeToggle';
+import { useAuth } from '../context/AuthContext';
 
 interface Session {
   session_id: string;
@@ -61,6 +66,8 @@ export const Sidebar = ({
   const [editTitle, setEditTitle] = useState('');
   const [deletingSession, setDeletingSession] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [desktopOpen, setDesktopOpen] = useState(true);
+  const { user, logout } = useAuth();
 
   const muiTheme = useTheme();
   const isMobile = useMediaQuery(muiTheme.breakpoints.down('md'));
@@ -78,6 +85,11 @@ export const Sidebar = ({
   const handleNewChat = () => {
     onNewChat();
     if (isMobile) setMobileOpen(false);
+  };
+
+  const handleCloseSidebar = () => {
+    if (isMobile) setMobileOpen(false);
+    else setDesktopOpen(false);
   };
 
   const handleRename = (session: Session) => {
@@ -160,7 +172,16 @@ export const Sidebar = ({
             </Typography>
           </Box>
         </Box>
-        <ThemeToggle />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+          <ThemeToggle />
+          {!isMobile && (
+            <Tooltip title="Close sidebar">
+              <IconButton onClick={handleCloseSidebar} size="small" sx={{ ml: 0.5 }}>
+                <ChevronLeftIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Box>
       </Box>
 
       <Divider sx={{ mx: 2, opacity: 0.4 }} />
@@ -346,11 +367,38 @@ export const Sidebar = ({
           p: 2,
           borderTop: '1px solid',
           borderColor: 'divider',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
         }}
       >
+        {user && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+            <Avatar
+              src={user.picture_url}
+              alt={user.name}
+              sx={{ width: 32, height: 32 }}
+            />
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography
+                variant="body2"
+                noWrap
+                sx={{ fontWeight: 500, fontSize: '0.8rem' }}
+              >
+                {user.name}
+              </Typography>
+              <Typography
+                variant="caption"
+                noWrap
+                sx={{ color: 'text.secondary', fontSize: '0.65rem', display: 'block' }}
+              >
+                {user.email}
+              </Typography>
+            </Box>
+            <Tooltip title="Sign out">
+              <IconButton onClick={logout} size="small" color="error">
+                <LogoutIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
         <Typography
           variant="caption"
           sx={{
@@ -358,6 +406,8 @@ export const Sidebar = ({
             opacity: 0.5,
             fontSize: '0.6rem',
             letterSpacing: '0.05em',
+            display: 'block',
+            textAlign: 'center',
           }}
         >
           v1.0.0
@@ -368,10 +418,10 @@ export const Sidebar = ({
 
   return (
     <>
-      {/* Hamburger button - only on mobile */}
-      {isMobile && (
+      {/* Hamburger button - always visible when sidebar is closed */}
+      {((isMobile && !mobileOpen) || (!isMobile && !desktopOpen)) && (
         <IconButton
-          onClick={() => setMobileOpen(true)}
+          onClick={() => isMobile ? setMobileOpen(true) : setDesktopOpen(true)}
           sx={{
             position: 'fixed',
             top: 12,
@@ -388,52 +438,27 @@ export const Sidebar = ({
         </IconButton>
       )}
 
-      {/* Desktop: permanent drawer */}
-      {!isMobile && (
-        <Drawer
-          variant="permanent"
-          sx={{
+      {/* Single Drawer for both mobile and desktop */}
+      <Drawer
+        variant="temporary"
+        open={isMobile ? mobileOpen : desktopOpen}
+        onClose={() => isMobile ? setMobileOpen(false) : setDesktopOpen(false)}
+        ModalProps={{ keepMounted: true }}
+        sx={{
+          '& .MuiDrawer-paper': {
             width: DRAWER_WIDTH,
-            flexShrink: 0,
-            '& .MuiDrawer-paper': {
-              width: DRAWER_WIDTH,
-              boxSizing: 'border-box',
-              borderRight: '1px solid',
-              borderColor: 'divider',
-              background: (theme) =>
-                theme.palette.mode === 'dark'
-                  ? 'linear-gradient(180deg, #0A0A0A 0%, #000000 100%)'
-                  : 'linear-gradient(180deg, #FAFAFA 0%, #F0F0F0 100%)',
-            },
-          }}
-        >
-          {drawerContent}
-        </Drawer>
-      )}
-
-      {/* Mobile: temporary drawer */}
-      {isMobile && (
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={() => setMobileOpen(false)}
-          ModalProps={{ keepMounted: true }}
-          sx={{
-            '& .MuiDrawer-paper': {
-              width: DRAWER_WIDTH,
-              boxSizing: 'border-box',
-              borderRight: '1px solid',
-              borderColor: 'divider',
-              background: (theme) =>
-                theme.palette.mode === 'dark'
-                  ? 'linear-gradient(180deg, #0A0A0A 0%, #000000 100%)'
-                  : 'linear-gradient(180deg, #FAFAFA 0%, #F0F0F0 100%)',
-            },
-          }}
-        >
-          {drawerContent}
-        </Drawer>
-      )}
+            boxSizing: 'border-box',
+            borderRight: '1px solid',
+            borderColor: 'divider',
+            background: (theme) =>
+              theme.palette.mode === 'dark'
+                ? 'linear-gradient(180deg, #0A0A0A 0%, #000000 100%)'
+                : 'linear-gradient(180deg, #FAFAFA 0%, #F0F0F0 100%)',
+          },
+        }}
+      >
+        {drawerContent}
+      </Drawer>
 
       {/* Rename Dialog */}
       <Dialog

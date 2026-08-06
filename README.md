@@ -1,11 +1,12 @@
-# CML Patient Assistant
+<h1 align="center">CML Patient Assistant</h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react" alt="React">
-  <img src="https://img.shields.io/badge/FastAPI-0.104+-009688?style=flat-square&logo=fastapi" alt="FastAPI">
-  <img src="https://img.shields.io/badge/Gemini-AI-4285F4?style=flat-square&logo=google" alt="Gemini AI">
-  <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python" alt="Python">
-  <img src="https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript" alt="TypeScript">
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=white" alt="React">
+  <img src="https://img.shields.io/badge/TypeScript-5.6-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/FastAPI-0.104+-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI">
+  <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python">
+  <img src="https://img.shields.io/badge/Gemini-AI-4285F4?style=for-the-badge&logo=google&logoColor=white" alt="Gemini AI">
+  <img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite">
 </p>
 
 <p align="center">
@@ -24,9 +25,9 @@
 
 | Feature | Description |
 |---------|-------------|
-| **TKI Information** | Detailed side effects and clinical red flags for all major TKIs |
+| **TKI Information** | Detailed side effects and clinical red flags for 6 major TKIs (Imatinib, Dasatinib, Nilotinib, Bosutinib, Ponatinib, Asciminib) |
 | **Drug Interactions** | Food rules, fasting requirements, antacid timing, and supplement exclusions |
-| **RAG-Powered Search** | Intelligent search over official CML guidelines using ChromaDB |
+| **RAG-Powered Search** | Intelligent search over official CML guidelines using ChromaDB vector database |
 | **Lab Data Access** | Chat retrieves your actual lab results to answer questions about your progress |
 | **Streaming Responses** | Real-time token-by-token responses via WebSocket |
 
@@ -34,40 +35,42 @@
 
 | Feature | Description |
 |---------|-------------|
-| **Manual Entry** | Add lab results (BCR-ABL1, WBC, platelets, hemoglobin) via form |
-| **File Upload** | Import CSV, PDF, or image lab reports with preview and validation |
-| **Trend Charts** | Logarithmic BCR-ABL1 chart and CBC trend visualization |
+| **Manual Entry** | Add lab results (BCR-ABL1, WBC, Platelets, Hemoglobin, RBC, Blast %, Basophils, Eosinophils) via form |
+| **File Upload** | Import CSV, PDF, or image lab reports with OCR parsing and validation |
+| **Trend Charts** | Color-coded bar charts with zone indicators for BCR-ABL1 and CBC tests |
 | **Treatment Timeline** | Visual history of TKI medications with current treatment badge |
-| **Milestone Tracking** | CCyR, MMR, MR4, MR4.5 achievement cards |
+| **Milestone Tracking** | CCyR, MMR, MR4, MR4.5 achievement cards with auto-recalculation |
 | **Smart Warnings** | Automatic alerts for rising BCR-ABL1, severe cytopenias, and stale data |
+| **Checkup Records** | Track doctor visits with multiple medications and costs |
+| **Next Checkup** | Upcoming appointment date with countdown and "items to bring" checklist |
 
 ### Security & Multi-User
 
 | Feature | Description |
 |---------|-------------|
 | **Google OAuth** | Secure authentication via Google Sign-In |
-| **Data Isolation** | Complete user-level data separation |
+| **Data Isolation** | Complete user-level data separation across all tables |
 | **Encryption** | Fernet symmetric encryption for lab values at rest |
-| **JWT Tokens** | Secure API and WebSocket authentication |
+| **JWT Tokens** | Secure API and WebSocket authentication (24-hour expiry) |
 
 ---
 
 ## Tech Stack
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Frontend                             │
-│  React 19 • TypeScript • Vite • MUI 6 • MUI X Charts       │
-├─────────────────────────────────────────────────────────────┤
-│                        Backend                              │
-│  Python 3.12 • FastAPI • WebSocket • SQLite                 │
-├─────────────────────────────────────────────────────────────┤
-│                          AI Layer                           │
-│  Gemini API • ChromaDB (RAG) • RapidOCR                     │
-├─────────────────────────────────────────────────────────────┤
-│                      Infrastructure                         │
-│  Docker • Railway • Google OAuth 2.0                         │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                           Frontend                              │
+│  React 19 • TypeScript • Vite 8 • MUI 6 • MUI X Charts         │
+├─────────────────────────────────────────────────────────────────┤
+│                           Backend                               │
+│  Python 3.12 • FastAPI • WebSocket • SQLite                     │
+├─────────────────────────────────────────────────────────────────┤
+│                           AI Layer                              │
+│  Gemini API • ChromaDB (RAG) • RapidOCR • PyPDF2                │
+├─────────────────────────────────────────────────────────────────┤
+│                         Infrastructure                          │
+│  Google OAuth 2.0 • JWT • Fernet Encryption                     │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -116,7 +119,8 @@ Required environment variables:
 | `JWT_SECRET` | Secret for JWT tokens | Generate: `python -c "import secrets; print(secrets.token_urlsafe(64))"` |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | Google Cloud Console |
-| `FRONTEND_URL` | Your app URL | `http://localhost:3000` for local |
+| `FRONTEND_URL` | Your app URL | `http://localhost:5173` for local |
+| `ENCRYPTION_KEY` | Fernet key for lab values | Optional: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` |
 
 ### 3. Run Locally
 
@@ -134,21 +138,74 @@ Open [http://localhost:5173](http://localhost:5173)
 
 ---
 
-## Docker Deployment
+## Project Structure
 
-### Local Docker
-
-```bash
-docker-compose up --build
 ```
-
-- Frontend: `http://localhost:3000`
-- Backend API: `http://localhost:8000`
-- API Docs: `http://localhost:8000/docs`
-
-### Railway Deployment
-
-See [Railway Deployment Guide](#railway-deployment) below.
+cml-patient-assistant/
+├── backend/
+│   ├── api/
+│   │   ├── main.py              # FastAPI app, CORS, middleware, startup events
+│   │   ├── routes.py            # Session CRUD endpoints
+│   │   ├── lab_routes.py        # Lab results, treatments, dashboard, milestones
+│   │   ├── auth_routes.py       # Google OAuth endpoints
+│   │   ├── upload_parser.py     # CSV, PDF, image parsing with regex patterns
+│   │   └── websocket.py         # WebSocket chat handler with Gemini tool loop
+│   ├── agent/
+│   │   ├── agent.py             # Gemini client setup with retry logic
+│   │   └── tools/
+│   │       ├── tki_info.py      # TKI side effects database (6 drugs)
+│   │       ├── food_rules.py    # Dietary interactions database (6 drugs)
+│   │       ├── rag_search.py    # ChromaDB PDF ingestion + vector search
+│   │       └── wiki_search.py   # Wikipedia fallback search
+│   ├── tests/
+│   │   ├── test_database.py     # Database schema, user CRUD, data isolation
+│   │   ├── test_auth.py         # JWT creation and verification
+│   │   ├── test_upload_parser.py
+│   │   ├── test_upload_integration.py
+│   │   └── test_lab_routes.py
+│   ├── auth.py                  # JWT creation/verification, FastAPI dependency
+│   ├── database.py              # SQLite operations, schema, migrations
+│   ├── encryption.py            # Fernet encryption/decryption
+│   ├── lab_warnings.py          # Trend analysis & clinical warning generation
+│   ├── cml_guide.pdf            # Medical guidelines for RAG ingestion
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── main.tsx             # React entry point, routing
+│   │   ├── App.tsx              # Main layout (sidebar + chat/dashboard)
+│   │   ├── api.ts               # ApiClient class (REST + WebSocket)
+│   │   ├── index.css            # Global styles, animations, fonts
+│   │   ├── context/
+│   │   │   └── AuthContext.tsx   # Authentication state management
+│   │   ├── theme/
+│   │   │   └── ThemeProvider.tsx # MUI theme config (dark/light)
+│   │   ├── pages/
+│   │   │   ├── LoginPage.tsx    # Google OAuth login page
+│   │   │   └── Dashboard.tsx    # Full dashboard with charts and data
+│   │   ├── components/
+│   │   │   ├── Sidebar.tsx      # Collapsible navigation drawer
+│   │   │   ├── ChatMessage.tsx  # Message bubble with markdown
+│   │   │   ├── ChatInput.tsx    # Multi-line chat input
+│   │   │   ├── LabResultsChart.tsx  # BCR-ABL1 zone bar + chart
+│   │   │   ├── CBCResults.tsx   # CBC test zone bar + chart
+│   │   │   ├── TreatmentTimeline.tsx  # Visual treatment history
+│   │   │   ├── MilestoneCards.tsx     # Achievement cards
+│   │   │   ├── WarningBanner.tsx      # Clinical warning alerts
+│   │   │   ├── DataEntryDialog.tsx    # Lab result entry form
+│   │   │   ├── TreatmentEntryDialog.tsx  # Treatment entry form
+│   │   │   ├── FileUploadDialog.tsx   # CSV/PDF/image upload
+│   │   │   ├── CheckupRecords.tsx     # Doctor visit records
+│   │   │   ├── NextCheckup.tsx        # Upcoming appointment
+│   │   │   ├── LabSummaryTable.tsx    # Date-grouped overview
+│   │   │   ├── LabResultsTable.tsx    # Full results table
+│   │   │   └── ProtectedRoute.tsx     # Auth guard wrapper
+│   │   └── utils/
+│   │       └── formatDate.ts    # Date formatting utility
+│   ├── package.json
+│   └── vite.config.ts
+├── .env.example
+└── README.md
+```
 
 ---
 
@@ -156,176 +213,188 @@ See [Railway Deployment Guide](#railway-deployment) below.
 
 ### REST Endpoints
 
+#### Authentication
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/sessions` | List all chat sessions |
+| `GET` | `/auth/google` | Redirect to Google OAuth consent screen |
+| `GET` | `/auth/google/callback` | OAuth callback; creates user, issues JWT |
+| `GET` | `/auth/me` | Get current user profile |
+
+#### Chat Sessions
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/sessions` | List all user sessions |
 | `POST` | `/api/sessions` | Create new session |
+| `PUT` | `/api/sessions/{id}` | Rename session |
+| `DELETE` | `/api/sessions/{id}` | Delete session and messages |
 | `GET` | `/api/sessions/{id}/messages` | Get session messages |
-| `DELETE` | `/api/sessions/{id}` | Delete session |
-| `GET` | `/api/lab-results` | List lab results |
+
+#### Lab Results
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/lab-results` | List lab results (optional `?test_type=` filter) |
 | `POST` | `/api/lab-results` | Add lab result |
 | `PUT` | `/api/lab-results/{id}` | Update lab result |
 | `DELETE` | `/api/lab-results/{id}` | Delete lab result |
 | `POST` | `/api/lab-results/bulk` | Bulk import results |
+
+#### Treatments
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | `GET` | `/api/treatments` | List treatments |
 | `POST` | `/api/treatments` | Add treatment |
-| `GET` | `/api/dashboard` | Get dashboard data |
-| `DELETE` | `/api/reset` | Reset all data |
+| `PUT` | `/api/treatments/{id}` | Update treatment |
+| `DELETE` | `/api/treatments/{id}` | Delete treatment |
+
+#### Dashboard & Milestones
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/dashboard` | Get dashboard data (latest values, warnings, milestones) |
+| `GET` | `/api/milestones` | List all milestones |
+
+#### Checkup Records
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/checkup-records` | List checkup records |
+| `POST` | `/api/checkup-records` | Create checkup record |
+| `PUT` | `/api/checkup-records/{id}` | Update checkup record |
+| `DELETE` | `/api/checkup-records/{id}` | Delete checkup record |
+
+#### User Settings
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/settings/{key}` | Get user setting |
+| `POST` | `/api/settings` | Save user setting (query params: `key`, `value`) |
+
+#### File Upload
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/upload-csv` | Parse CSV lab report |
+| `POST` | `/api/upload-pdf` | Parse PDF lab report |
+| `POST` | `/api/upload-image` | Parse image lab report via OCR |
+
+#### Data Management
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `DELETE` | `/api/reset` | Delete all user data (lab results, treatments, milestones, sessions, checkup records) |
 
 ### WebSocket
 
 Connect to `ws://localhost:8000/ws/chat?token=<jwt>`
 
-**Send:**
-```json
+**Message Flow:**
+
+```
+Client → Server:
 {
   "type": "chat",
   "session_id": "abc123",
   "message": "What are the side effects of Imatinib?"
 }
-```
 
-**Receive:**
-```json
+Server → Client:
+{"type": "status", "content": "Thinking..."}
+{"type": "tool_call", "tool": "tki_info", "args": {"drug_name": "Imatinib"}}
+{"type": "tool_result", "tool": "tki_info", "result": "..."}
 {"type": "token", "content": "Imatinib "}
 {"type": "token", "content": "commonly causes..."}
-{"type": "tool_call", "tool": "tki_info", "args": {"drug_name": "Imatinib"}}
 {"type": "complete", "full_response": "Imatinib commonly causes..."}
 ```
 
-### Authentication
+---
+
+## Database Schema
+
+| Table | Key Columns | Description |
+|-------|-------------|-------------|
+| `users` | `user_id` (PK), `email`, `name`, `picture_url` | User accounts |
+| `sessions` | `session_id` (PK), `title`, `user_id` (FK) | Chat sessions |
+| `messages` | `id` (PK), `session_id` (FK), `role`, `content` | Chat messages |
+| `lab_results` | `id` (PK), `test_type`, `value`, `unit`, `test_date`, `user_id` (FK) | Lab results (encrypted) |
+| `treatments` | `id` (PK), `drug_name`, `dosage_mg`, `start_date`, `user_id` (FK) | TKI treatments |
+| `milestones` | `id` (PK), `milestone_type`, `achieved`, `user_id` (FK) | Treatment milestones |
+| `checkup_records` | `id` (PK), `checkup_date`, `doctor_advice`, `medications_bought`, `user_id` (FK) | Doctor visits |
+| `user_settings` | `key` + `user_id` (composite PK), `value` | User preferences |
+
+---
+
+## Medical Data
+
+### Supported TKIs
+
+| Drug | Brand Name | Common Side Effects |
+|------|------------|---------------------|
+| Imatinib | Gleevec | Edema, nausea, muscle cramps, rash |
+| Dasatinib | Sprycel | Pleural effusion, bleeding, infections |
+| Nilotinib | Tasigna | QT prolongation, vascular events |
+| Bosutinib | Bosulif | Diarrhea, rash, liver toxicity |
+| Ponatinib | Iclusig | Hypertension, thrombosis, pancreatitis |
+| Asciminib | Scemblix | Upper respiratory infections, musculoskeletal pain |
+
+### Treatment Response Thresholds
+
+| Milestone | BCR-ABL1 Threshold | Description |
+|-----------|-------------------|-------------|
+| CCyR | ≤ 1.0% | Complete cytogenetic response |
+| MMR | ≤ 0.1% | Major molecular response |
+| MR4 | ≤ 0.01% | Molecular response 4 |
+| MR4.5 | ≤ 0.0032% | Deep molecular response |
+
+### CBC Normal Ranges
+
+| Test | Normal Range | Unit |
+|------|--------------|------|
+| WBC | 4.5 – 11.0 | K/µL |
+| Platelets | 150 – 400 | K/µL |
+| Hemoglobin | 12.0 – 17.0 | g/dL |
+| RBC | 4.0 – 5.5 | M/µL |
+
+---
+
+## Testing
 
 ```bash
-# Get JWT token
-GET /auth/google
+# Run all backend tests
+cd backend
+python -m pytest tests/ -v
 
-# Google callback
-GET /auth/google/callback?code=...
-
-# Get current user
-GET /auth/me
-Authorization: Bearer <token>
+# Run specific test file
+python -m pytest tests/test_database.py -v
 ```
-
----
-
-## Project Structure
-
-```
-cml-patient-assistant/
-├── backend/
-│   ├── api/
-│   │   ├── main.py              # FastAPI app & middleware
-│   │   ├── routes.py            # Session CRUD endpoints
-│   │   ├── lab_routes.py        # Lab results, treatments, dashboard
-│   │   ├── auth_routes.py       # Google OAuth endpoints
-│   │   ├── upload_parser.py     # CSV, PDF, image parsing
-│   │   └── websocket.py         # WebSocket chat handler
-│   ├── agent/
-│   │   ├── agent.py             # Gemini client & tool registration
-│   │   └── tools/
-│   │       ├── tki_info.py      # TKI side effects lookup
-│   │       ├── food_rules.py    # Dietary interactions
-│   │       ├── rag_search.py    # ChromaDB vector search
-│   │       └── wiki_search.py   # Wikipedia fallback
-│   ├── auth.py                  # JWT & OAuth utilities
-│   ├── database.py              # SQLite operations
-│   ├── encryption.py            # Fernet encryption
-│   ├── lab_warnings.py          # Trend analysis & alerts
-│   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   ├── App.tsx              # Main layout
-│   │   ├── api.ts               # API client
-│   │   ├── context/
-│   │   │   └── AuthContext.tsx   # Authentication state
-│   │   ├── pages/
-│   │   │   ├── LoginPage.tsx    # Google OAuth login
-│   │   │   └── Dashboard.tsx    # Lab tracker dashboard
-│   │   ├── components/
-│   │   │   ├── ChatMessage.tsx  # Message bubbles
-│   │   │   ├── ChatInput.tsx    # Message input
-│   │   │   ├── Sidebar.tsx      # Session list
-│   │   │   ├── ProtectedRoute.tsx
-│   │   │   ├── LabResultsChart.tsx
-│   │   │   ├── CBCResults.tsx
-│   │   │   ├── TreatmentTimeline.tsx
-│   │   │   ├── MilestoneCards.tsx
-│   │   │   ├── DataEntryDialog.tsx
-│   │   │   ├── FileUploadDialog.tsx
-│   │   │   └── WarningBanner.tsx
-│   │   └── theme/
-│   │       └── ThemeProvider.tsx
-│   └── package.json
-├── cml_guide.pdf                # Medical guidelines for RAG
-├── docker-compose.yml
-├── Dockerfile                   # Multi-stage production build
-├── railway.json                 # Railway deployment config
-├── .env.example
-└── README.md
-```
-
----
-
-## Railway Deployment
-
-### Step 1: Google Cloud Console
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a project and enable Google+ API
-3. Go to **APIs & Services > Credentials**
-4. Create **OAuth 2.0 Client ID** (Web application)
-5. Add authorized redirect URI: `https://your-app.up.railway.app/auth/google/callback`
-
-### Step 2: Deploy to Railway
-
-1. Push code to GitHub
-2. Go to [railway.app](https://railway.app) and create a new project
-3. **Deploy from GitHub repo** → select your repository
-4. Railway auto-detects the `Dockerfile` at root
-5. Go to **Settings > Networking** → Generate Domain → port `8000`
-
-### Step 3: Set Environment Variables
-
-In Railway dashboard → **Variables**:
-
-```
-GEMINI_API_KEY=your_key
-GEMINI_MODEL=gemini-2.0-flash
-JWT_SECRET=generate_random_string
-GOOGLE_CLIENT_ID=from_google_console
-GOOGLE_CLIENT_SECRET=from_google_console
-FRONTEND_URL=https://your-app.up.railway.app
-```
-
-### Step 4: Update Google OAuth
-
-1. Copy your Railway domain
-2. Update redirect URI in Google Cloud Console to:
-   ```
-   https://your-app.up.railway.app/auth/google/callback
-   ```
-3. Redeploy the service
 
 ---
 
 ## Development
 
-### Running Tests
+### Available Scripts
 
-If you prefer to run the components independently:
-
-### 1. Ingest the Guidelines PDF
-Ingest the CML guidelines document into the vector database (run once):
+**Frontend:**
 ```bash
-cd backend
-python -m pytest tests/ -v
+npm run dev      # Start Vite dev server
+npm run build    # Production build
+npm run lint     # Run OxLint
+npm run preview  # Preview production build
+```
+
+**Backend:**
+```bash
+uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload  # Dev server
+python -m pytest tests/ -v                                  # Run tests
 ```
 
 ### Code Style
 
 - **Backend**: Follow PEP 8
-- **Frontend**: ESLint + Prettier (configured in `package.json`)
+- **Frontend**: OxLint + TypeScript strict mode
 
 ---
 
@@ -361,6 +430,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [Google Gemini API](https://ai.google.dev/) for AI capabilities
 - [ChromaDB](https://www.trychroma.com/) for vector search
+- [RapidOCR](https://github.com/RapidAI/RapidOCR) for image-based lab report parsing
 - [MUI](https://mui.com/) for Material-UI components
 - [FastAPI](https://fastapi.tiangolo.com/) for the backend framework
 - CML medical guidelines and research papers

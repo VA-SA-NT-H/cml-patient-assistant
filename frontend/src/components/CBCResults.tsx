@@ -3,7 +3,10 @@ import { Box, Typography, Chip } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ErrorIcon from '@mui/icons-material/Error';
+import { BarChart } from '@mui/x-charts/BarChart';
 import { useTheme } from '../theme/ThemeProvider';
+import { apiClient } from '../api';
+import { formatDate } from '../utils/formatDate';
 
 interface LabResult {
   value: string;
@@ -14,6 +17,8 @@ interface ZoneConfig {
   zones: { min: number; max: number; label: string; color: string; status: string }[];
   normalLabel: string;
   barGradient: string;
+  normalMin: number;
+  normalMax: number;
 }
 
 interface Props {
@@ -27,6 +32,8 @@ const ZONE_CONFIGS: Record<string, ZoneConfig> = {
   cbc_wbc: {
     normalLabel: 'Normal (4.5–11.0 K/µL)',
     barGradient: 'linear-gradient(90deg, #D32F2F 0%, #E9A23B 25%, #2A9D8F 40%, #2A9D8F 60%, #E9A23B 75%, #D32F2F 100%)',
+    normalMin: 4.5,
+    normalMax: 11.0,
     zones: [
       { min: 0, max: 4.5, label: 'Low — Leukopenia', color: '#E9A23B', status: 'Watch' },
       { min: 4.5, max: 11.0, label: 'Normal range', color: '#2A9D8F', status: 'Good' },
@@ -36,6 +43,8 @@ const ZONE_CONFIGS: Record<string, ZoneConfig> = {
   cbc_platelets: {
     normalLabel: 'Normal (150–400 K/µL)',
     barGradient: 'linear-gradient(90deg, #D32F2F 0%, #E9A23B 25%, #2A9D8F 40%, #2A9D8F 60%, #E9A23B 75%, #D32F2F 100%)',
+    normalMin: 150,
+    normalMax: 400,
     zones: [
       { min: 0, max: 150, label: 'Low — Thrombocytopenia', color: '#E9A23B', status: 'Watch' },
       { min: 150, max: 400, label: 'Normal range', color: '#2A9D8F', status: 'Good' },
@@ -45,10 +54,23 @@ const ZONE_CONFIGS: Record<string, ZoneConfig> = {
   cbc_hemoglobin: {
     normalLabel: 'Normal (12.0–17.0 g/dL)',
     barGradient: 'linear-gradient(90deg, #D32F2F 0%, #E9A23B 25%, #2A9D8F 40%, #2A9D8F 60%, #E9A23B 75%, #D32F2F 100%)',
+    normalMin: 12.0,
+    normalMax: 17.0,
     zones: [
       { min: 0, max: 12.0, label: 'Low — Anemia', color: '#E9A23B', status: 'Watch' },
       { min: 12.0, max: 17.0, label: 'Normal range', color: '#2A9D8F', status: 'Good' },
       { min: 17.0, max: Infinity, label: 'High', color: '#D32F2F', status: 'Concern' },
+    ],
+  },
+  cbc_rbc: {
+    normalLabel: 'Normal (4.0–5.5 M/µL)',
+    barGradient: 'linear-gradient(90deg, #D32F2F 0%, #E9A23B 25%, #2A9D8F 40%, #2A9D8F 60%, #E9A23B 75%, #D32F2F 100%)',
+    normalMin: 4.0,
+    normalMax: 5.5,
+    zones: [
+      { min: 0, max: 4.0, label: 'Low — Anemia', color: '#E9A23B', status: 'Watch' },
+      { min: 4.0, max: 5.5, label: 'Normal range', color: '#2A9D8F', status: 'Good' },
+      { min: 5.5, max: Infinity, label: 'High', color: '#D32F2F', status: 'Concern' },
     ],
   },
 };
@@ -81,7 +103,7 @@ export const CBCResults = ({ testType, title, unit }: Props) => {
 
   const fetchData = async () => {
     try {
-      const response = await fetch(`http://localhost:8000/api/lab-results?test_type=${testType}`);
+      const response = await apiClient.get(`/api/lab-results?test_type=${testType}`);
       const results = await response.json();
       setData(results);
     } catch (error) {
@@ -121,10 +143,8 @@ export const CBCResults = ({ testType, title, unit }: Props) => {
     const diff = latestValue - prev;
     if (Math.abs(diff) < 0.1) trend = 'stable';
     else if (testType === 'cbc_hemoglobin') {
-      // For hemoglobin, lower might be bad (anemia)
       trend = diff > 0.1 ? 'improving' : diff < -0.1 ? 'rising' : 'stable';
     } else {
-      // For WBC and platelets, staying in normal range is good
       const inNormalNow = latestValue >= config.zones[1].min && latestValue < config.zones[1].max;
       const inNormalBefore = prev >= config.zones[1].min && prev < config.zones[1].max;
       if (inNormalNow && !inNormalBefore) trend = 'improving';
@@ -132,6 +152,21 @@ export const CBCResults = ({ testType, title, unit }: Props) => {
       else trend = 'stable';
     }
   }
+
+  // Prepare chart data
+  const chartData = data.map(d => ({
+    date: d.test_date,
+    value: parseFloat(d.value),
+  }));
+  const xLabels = chartData.map(d => formatDate(d.date));
+  const yValues = chartData.map(d => d.value);
+
+  // Build per-point colored series (one series per zone color)
+  const coloredSeries = config.zones.map(zone => ({
+    label: zone.label,
+    color: zone.color,
+    data: yValues.map(v => (v >= zone.min && v < zone.max) ? v : null),
+  })).filter(s => s.data.some(v => v !== null));
 
   return (
     <Box>
@@ -162,6 +197,16 @@ export const CBCResults = ({ testType, title, unit }: Props) => {
           />
         </Box>
 
+        {/* Value + Date */}
+        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 0.75 }}>
+          <Typography variant="body2" sx={{ fontFamily: '"JetBrains Mono", monospace', fontWeight: 700 }}>
+            {latest.value} <span style={{ opacity: 0.5, fontSize: '0.7rem' }}>{unit}</span>
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
+            {formatDate(latest.test_date)}
+          </Typography>
+        </Box>
+
         {/* The bar */}
         <Box
           sx={{
@@ -173,7 +218,6 @@ export const CBCResults = ({ testType, title, unit }: Props) => {
             opacity: 0.8,
           }}
         >
-          {/* Marker */}
           <Box
             sx={{
               position: 'absolute',
@@ -213,7 +257,6 @@ export const CBCResults = ({ testType, title, unit }: Props) => {
           </Box>
         </Box>
 
-        {/* Labels */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.5 }}>
           <Typography variant="caption" sx={{ color: '#E9A23B', fontSize: '0.5rem', opacity: 0.8 }}>
             Low
@@ -227,90 +270,45 @@ export const CBCResults = ({ testType, title, unit }: Props) => {
         </Box>
       </Box>
 
-      {/* ── Recent Results Table ── */}
-      <Box>
-        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, display: 'block', mb: 0.75 }}>
-          Recent {title.toLowerCase()} results
-        </Typography>
-        <Box
-          component="table"
-          sx={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            '& th, & td': {
-              py: 0.75,
-              px: 1,
-              textAlign: 'left',
-              fontSize: '0.75rem',
-              borderBottom: '1px solid',
-              borderColor: 'divider',
-            },
-            '& th': {
-              fontWeight: 600,
-              color: 'text.secondary',
-              fontSize: '0.6rem',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-            },
-            '& td': {
-              fontFamily: '"JetBrains Mono", monospace',
-            },
-            '& tr:last-child td': {
-              borderBottom: 'none',
-            },
-          }}
-        >
-          <Box component="thead">
-            <Box component="tr">
-              <Box component="th">Date</Box>
-              <Box component="th">{title}</Box>
-              <Box component="th">Status</Box>
-            </Box>
+      {/* ── Bar Chart ── */}
+      {data.length >= 2 && (
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, display: 'block', mb: 1 }}>
+            {title} trend
+          </Typography>
+          <Box sx={{ width: '100%', height: 220 }}>
+            <BarChart
+              xAxis={[{
+                data: xLabels,
+                scaleType: 'band',
+                tickLabelStyle: {
+                  fontSize: 10,
+                  fill: mode === 'dark' ? '#aaa' : '#666',
+                },
+              }]}
+              yAxis={[{
+                min: 0,
+                tickLabelStyle: {
+                  fontSize: 10,
+                  fill: mode === 'dark' ? '#aaa' : '#666',
+                },
+              }]}
+              series={coloredSeries.map(s => ({
+                data: s.data,
+                color: s.color,
+              }))}
+              height={220}
+              margin={{ top: 20, bottom: 30, left: 50, right: 20 }}
+            />
           </Box>
-          <Box component="tbody">
-            {[...data].reverse().slice(0, 5).map((result, i) => {
-              const val = parseFloat(result.value);
-              const z = getZoneForValue(val, config);
-              return (
-                <Box component="tr" key={i}>
-                  <Box component="td" sx={{ fontFamily: '"IBM Plex Sans", sans-serif' }}>
-                    {result.test_date}
-                  </Box>
-                  <Box component="td" sx={{ fontWeight: 500 }}>
-                    {result.value} <span style={{ opacity: 0.5, fontSize: '0.65rem' }}>{unit}</span>
-                  </Box>
-                  <Box component="td">
-                    <Box
-                      sx={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 0.5,
-                        px: 0.75,
-                        py: 0.2,
-                        borderRadius: 0.75,
-                        bgcolor: mode === 'dark' ? `${z.color}22` : `${z.color}11`,
-                        color: z.color,
-                        fontSize: '0.65rem',
-                        fontWeight: 500,
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          width: 5,
-                          height: 5,
-                          borderRadius: '50%',
-                          bgcolor: z.color,
-                        }}
-                      />
-                      {z.status}
-                    </Box>
-                  </Box>
-                </Box>
-              );
-            })}
+          {/* Normal range reference lines */}
+          <Box sx={{ display: 'flex', gap: 2, mt: 0.5, justifyContent: 'center' }}>
+            <Typography variant="caption" sx={{ fontSize: '0.6rem', color: '#2A9D8F' }}>
+              Normal: {config.normalMin}–{config.normalMax} {unit}
+            </Typography>
           </Box>
         </Box>
-      </Box>
+      )}
 
       {/* ── Trend summary ── */}
       {trend && (

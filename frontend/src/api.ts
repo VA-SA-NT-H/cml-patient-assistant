@@ -9,9 +9,12 @@ class ApiClient {
 
   private async request(path: string, options: RequestInit = {}) {
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       ...options.headers as Record<string, string>
     };
+
+    if (options.body) {
+      headers['Content-Type'] = 'application/json';
+    }
 
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
@@ -35,7 +38,10 @@ class ApiClient {
     return this.request(path);
   }
 
-  async post(path: string, body: any) {
+  async post(path: string, body?: any) {
+    if (body === undefined) {
+      return this.request(path, { method: 'POST' });
+    }
     return this.request(path, {
       method: 'POST',
       body: JSON.stringify(body)

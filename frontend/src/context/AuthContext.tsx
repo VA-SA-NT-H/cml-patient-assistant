@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { apiClient } from '../api';
 
 interface User {
   user_id: string;
@@ -24,15 +25,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (token) {
+      apiClient.setToken(token);
       fetchUser();
     }
   }, [token]);
 
   const fetchUser = async () => {
     try {
-      const response = await fetch('/auth/me', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await apiClient.get('/auth/me');
       if (response.ok) {
         const userData = await response.json();
         setUser(userData);
@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = () => {
-    window.location.href = '/auth/google';
+    window.location.href = `${apiClient.getBaseUrl()}/auth/google`;
   };
 
   const logout = () => {

@@ -49,7 +49,7 @@ async def google_callback(request: Request):
     
     # Redirect to frontend with token
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    return RedirectResponse(f"{frontend_url}/auth/callback?token={jwt_token}")
+    return RedirectResponse(f"{frontend_url}/login?token={jwt_token}")
 
 @router.get("/me")
 async def get_me(user_id: str = Depends(get_current_user)):
