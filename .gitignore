@@ -53,5 +53,5 @@ htmlcov/
 docker-compose.override.yml
 
 # Docs
-docs/
+.docs/
 
