@@ -1,117 +1,317 @@
-# CML Patient Assistant: TKI Side Effect Navigator
+# CML Patient Assistant
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Python: 3.12](https://img.shields.io/badge/Python-3.12-green.svg)](https://www.python.org/)
-[![React: 19](https://img.shields.io/badge/React-19-blue.svg)](https://react.dev/)
-[![FastAPI: 0.111+](https://img.shields.io/badge/FastAPI-0.111%2B-teal.svg)](https://fastapi.tiangolo.com/)
-[![Gemini: Pro](https://img.shields.io/badge/Gemini-Pro-orange.svg)](https://deepmind.google/technologies/gemini/)
+<p align="center">
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react" alt="React">
+  <img src="https://img.shields.io/badge/FastAPI-0.104+-009688?style=flat-square&logo=fastapi" alt="FastAPI">
+  <img src="https://img.shields.io/badge/Gemini-AI-4285F4?style=flat-square&logo=google" alt="Gemini AI">
+  <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python" alt="Python">
+  <img src="https://img.shields.io/badge/TypeScript-5.6-3178C6?style=flat-square&logo=typescript" alt="TypeScript">
+</p>
 
-An empathetic, intelligent web application designed for **Chronic Myeloid Leukemia (CML)** patients to safely navigate Tyrosine Kinase Inhibitor (TKI) side effects, track lab trends (BCR-ABL1 and CBC metrics), and manage their treatment journey securely.
+<p align="center">
+  <strong>Your personalized AI companion for navigating CML treatment</strong>
+</p>
+
+<p align="center">
+  A comprehensive web application for Chronic Myeloid Leukemia (CML) patients to manage TKI side effects, track lab results, and monitor their treatment journey with AI-powered assistance.
+</p>
 
 ---
 
-## Key Features
+## Features
 
-### Empathetic AI Chat Assistant
-*   **TKI Reference Engine:** Instant lookup of side effects and critical clinical "red flags" for all major TKIs (Imatinib, Dasatinib, Nilotinib, Bosutinib, Ponatinib, Asciminib).
-*   **Dietary & Food Rules:** Quick checks for fasting requirements, antacid scheduling, and food/supplement interactions.
-*   **RAG-Powered Guidelines:** Interactive RAG search over official medical guidelines using **ChromaDB**.
-*   **Contextual Bridging:** Warm, lifestyle-focused conversations that creatively bridge general topics (like stress or travel) back to practical CML care.
-*   **Streaming Responses:** Real-time, token-by-token message streaming via WebSockets.
-*   **Lab Integration:** The chatbot securely references your recorded lab values to answer questions about your progress.
+### AI Chat Assistant
 
-### Lab Tracker & Milestone Dashboard
-*   **Flexible Data Entry:** Manually record results or upload CSV/PDF lab reports with validation previews.
-*   **Trend Visualization:** Interactive logarithmic charts for BCR-ABL1 ratio trends and linear charts for CBC metrics (WBC, Platelets, Hemoglobin) built with MUI X Charts.
-*   **Treatment Timeline:** Visual history of TKI treatment shifts showing current and past drugs.
-*   **Milestone Cards:** Automatic achievement tracking for major response milestones: CCyR, MMR, MR4, and MR4.5.
-*   **Safety Warning System:** Visual alerts for loss of response, rising BCR-ABL1 ratios, severe cytopenias (neutropenia, thrombocytopenia, anemia), or outdated lab data.
-*   **Symmetric Encryption:** Fernet cryptography keeps all patient lab results encrypted at rest.
+| Feature | Description |
+|---------|-------------|
+| **TKI Information** | Detailed side effects and clinical red flags for all major TKIs |
+| **Drug Interactions** | Food rules, fasting requirements, antacid timing, and supplement exclusions |
+| **RAG-Powered Search** | Intelligent search over official CML guidelines using ChromaDB |
+| **Lab Data Access** | Chat retrieves your actual lab results to answer questions about your progress |
+| **Streaming Responses** | Real-time token-by-token responses via WebSocket |
+
+### Lab Tracker Dashboard
+
+| Feature | Description |
+|---------|-------------|
+| **Manual Entry** | Add lab results (BCR-ABL1, WBC, platelets, hemoglobin) via form |
+| **File Upload** | Import CSV, PDF, or image lab reports with preview and validation |
+| **Trend Charts** | Logarithmic BCR-ABL1 chart and CBC trend visualization |
+| **Treatment Timeline** | Visual history of TKI medications with current treatment badge |
+| **Milestone Tracking** | CCyR, MMR, MR4, MR4.5 achievement cards |
+| **Smart Warnings** | Automatic alerts for rising BCR-ABL1, severe cytopenias, and stale data |
+
+### Security & Multi-User
+
+| Feature | Description |
+|---------|-------------|
+| **Google OAuth** | Secure authentication via Google Sign-In |
+| **Data Isolation** | Complete user-level data separation |
+| **Encryption** | Fernet symmetric encryption for lab values at rest |
+| **JWT Tokens** | Secure API and WebSocket authentication |
 
 ---
 
 ## Tech Stack
 
-| Component | Technologies |
-| :--- | :--- |
-| **Frontend** | React 19, TypeScript 6, Vite 8, Material UI (MUI) 6, MUI X Charts, React Router |
-| **Backend** | Python 3.12, FastAPI, WebSockets, SQLite |
-| **AI / RAG** | Gemini API (`google-genai`), ChromaDB Vector Store |
-| **Security** | Fernet Symmetric Encryption (`cryptography` library) |
-| **Deployment** | Docker, Docker Compose |
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Frontend                             │
+│  React 19 • TypeScript • Vite • MUI 6 • MUI X Charts       │
+├─────────────────────────────────────────────────────────────┤
+│                        Backend                              │
+│  Python 3.12 • FastAPI • WebSocket • SQLite                 │
+├─────────────────────────────────────────────────────────────┤
+│                          AI Layer                           │
+│  Gemini API • ChromaDB (RAG) • RapidOCR                     │
+├─────────────────────────────────────────────────────────────┤
+│                      Infrastructure                         │
+│  Docker • Railway • Google OAuth 2.0                         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- **Python 3.12+**
+- **Node.js 20+**
+- **Google Gemini API Key** ([Get one here](https://makersuite.google.com/app/apikey))
+- **Google Cloud Console** project with OAuth credentials (for authentication)
+
+### 1. Clone & Install
+
+```bash
+# Clone the repository
+git clone https://github.com/your-username/cml-patient-assistant.git
+cd cml-patient-assistant
+
+# Install backend dependencies
+cd backend
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+# Install frontend dependencies
+cd ../frontend
+npm install
+```
+
+### 2. Configure Environment
+
+```bash
+# Copy environment template
+cp .env.example .env
+
+# Edit .env with your credentials
+```
+
+Required environment variables:
+
+| Variable | Description | How to get |
+|----------|-------------|------------|
+| `GEMINI_API_KEY` | Google Gemini API key | [Google AI Studio](https://makersuite.google.com/app/apikey) |
+| `JWT_SECRET` | Secret for JWT tokens | Generate: `python -c "import secrets; print(secrets.token_urlsafe(64))"` |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID | [Google Cloud Console](https://console.cloud.google.com/apis/credentials) |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | Google Cloud Console |
+| `FRONTEND_URL` | Your app URL | `http://localhost:3000` for local |
+
+### 3. Run Locally
+
+```bash
+# Terminal 1: Backend
+cd backend
+uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+
+# Terminal 2: Frontend
+cd frontend
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173)
+
+---
+
+## Docker Deployment
+
+### Local Docker
+
+```bash
+docker-compose up --build
+```
+
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:8000`
+- API Docs: `http://localhost:8000/docs`
+
+### Railway Deployment
+
+See [Railway Deployment Guide](#railway-deployment) below.
+
+---
+
+## API Reference
+
+### REST Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/sessions` | List all chat sessions |
+| `POST` | `/api/sessions` | Create new session |
+| `GET` | `/api/sessions/{id}/messages` | Get session messages |
+| `DELETE` | `/api/sessions/{id}` | Delete session |
+| `GET` | `/api/lab-results` | List lab results |
+| `POST` | `/api/lab-results` | Add lab result |
+| `PUT` | `/api/lab-results/{id}` | Update lab result |
+| `DELETE` | `/api/lab-results/{id}` | Delete lab result |
+| `POST` | `/api/lab-results/bulk` | Bulk import results |
+| `GET` | `/api/treatments` | List treatments |
+| `POST` | `/api/treatments` | Add treatment |
+| `GET` | `/api/dashboard` | Get dashboard data |
+| `DELETE` | `/api/reset` | Reset all data |
+
+### WebSocket
+
+Connect to `ws://localhost:8000/ws/chat?token=<jwt>`
+
+**Send:**
+```json
+{
+  "type": "chat",
+  "session_id": "abc123",
+  "message": "What are the side effects of Imatinib?"
+}
+```
+
+**Receive:**
+```json
+{"type": "token", "content": "Imatinib "}
+{"type": "token", "content": "commonly causes..."}
+{"type": "tool_call", "tool": "tki_info", "args": {"drug_name": "Imatinib"}}
+{"type": "complete", "full_response": "Imatinib commonly causes..."}
+```
+
+### Authentication
+
+```bash
+# Get JWT token
+GET /auth/google
+
+# Google callback
+GET /auth/google/callback?code=...
+
+# Get current user
+GET /auth/me
+Authorization: Bearer <token>
+```
 
 ---
 
 ## Project Structure
 
 ```
+cml-patient-assistant/
 ├── backend/
 │   ├── api/
-│   │   ├── main.py              # FastAPI application entry point
-│   │   ├── routes.py            # Session CRUD API endpoints
-│   │   ├── lab_routes.py        # Lab records, timeline, and dashboard metrics
-│   │   ├── upload_parser.py     # Parser for CSV/PDF lab report imports
-│   │   └── websocket.py         # WebSocket chat handler with streaming Gemini integration
+│   │   ├── main.py              # FastAPI app & middleware
+│   │   ├── routes.py            # Session CRUD endpoints
+│   │   ├── lab_routes.py        # Lab results, treatments, dashboard
+│   │   ├── auth_routes.py       # Google OAuth endpoints
+│   │   ├── upload_parser.py     # CSV, PDF, image parsing
+│   │   └── websocket.py         # WebSocket chat handler
 │   ├── agent/
-│   │   ├── agent.py             # Gemini API client initialization & tools registry
-│   │   └── tools/               # Agent tool executors
-│   │       ├── tki_info.py      # Drug side effects registry
-│   │       ├── food_rules.py    # Food-drug interaction lookup
-│   │       ├── rag_search.py    # Guidelines document indexer & query engine
-│   │       └── wiki_search.py   # Fallback query runner
-│   ├── database.py              # SQLite schemas and database operations
-│   ├── encryption.py            # Fernet encrypt/decrypt helpers
-│   ├── lab_warnings.py          # Trend analysis and safety warning engine
-│   ├── requirements.txt         # Backend Python dependencies
-│   └── Dockerfile
+│   │   ├── agent.py             # Gemini client & tool registration
+│   │   └── tools/
+│   │       ├── tki_info.py      # TKI side effects lookup
+│   │       ├── food_rules.py    # Dietary interactions
+│   │       ├── rag_search.py    # ChromaDB vector search
+│   │       └── wiki_search.py   # Wikipedia fallback
+│   ├── auth.py                  # JWT & OAuth utilities
+│   ├── database.py              # SQLite operations
+│   ├── encryption.py            # Fernet encryption
+│   ├── lab_warnings.py          # Trend analysis & alerts
+│   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx              # Main routing & application wrapper
-│   │   ├── main.tsx             # DOM entry point
+│   │   ├── App.tsx              # Main layout
+│   │   ├── api.ts               # API client
+│   │   ├── context/
+│   │   │   └── AuthContext.tsx   # Authentication state
 │   │   ├── pages/
-│   │   │   └── Dashboard.tsx    # Lab tracking dashboard & visualization page
-│   │   ├── components/          # Reusable UI widgets (charts, sidebar, dialogs)
-│   │   └── theme/               # Dark & Light MUI configuration provider
-│   ├── package.json
-│   └── Dockerfile
-├── cml_guide.pdf                 # Reference medical guide for RAG ingestion
-├── docker-compose.yml            # Multi-container orchestrator
+│   │   │   ├── LoginPage.tsx    # Google OAuth login
+│   │   │   └── Dashboard.tsx    # Lab tracker dashboard
+│   │   ├── components/
+│   │   │   ├── ChatMessage.tsx  # Message bubbles
+│   │   │   ├── ChatInput.tsx    # Message input
+│   │   │   ├── Sidebar.tsx      # Session list
+│   │   │   ├── ProtectedRoute.tsx
+│   │   │   ├── LabResultsChart.tsx
+│   │   │   ├── CBCResults.tsx
+│   │   │   ├── TreatmentTimeline.tsx
+│   │   │   ├── MilestoneCards.tsx
+│   │   │   ├── DataEntryDialog.tsx
+│   │   │   ├── FileUploadDialog.tsx
+│   │   │   └── WarningBanner.tsx
+│   │   └── theme/
+│   │       └── ThemeProvider.tsx
+│   └── package.json
+├── cml_guide.pdf                # Medical guidelines for RAG
+├── docker-compose.yml
+├── Dockerfile                   # Multi-stage production build
+├── railway.json                 # Railway deployment config
 ├── .env.example
 └── README.md
 ```
 
 ---
 
-## Setup & Installation
+## Railway Deployment
 
-### 1. Configure the Environment
-Create a `.env` file in the root directory by copying the example template:
-```bash
-cp .env.example .env
-```
-Provide your API keys and configuration:
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemma-4-31b-it
-ENCRYPTION_KEY=your-fernet-key-here
-```
-> [!TIP]
-> Generate a secure Fernet encryption key using this command:
-> ```bash
-> python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-> ```
+### Step 1: Google Cloud Console
 
-### 2. Run with Docker (Recommended)
-Launch the entire stack (Frontend, Backend API, and Database) with a single command:
-```bash
-docker-compose up --build
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a project and enable Google+ API
+3. Go to **APIs & Services > Credentials**
+4. Create **OAuth 2.0 Client ID** (Web application)
+5. Add authorized redirect URI: `https://your-app.up.railway.app/auth/google/callback`
+
+### Step 2: Deploy to Railway
+
+1. Push code to GitHub
+2. Go to [railway.app](https://railway.app) and create a new project
+3. **Deploy from GitHub repo** → select your repository
+4. Railway auto-detects the `Dockerfile` at root
+5. Go to **Settings > Networking** → Generate Domain → port `8000`
+
+### Step 3: Set Environment Variables
+
+In Railway dashboard → **Variables**:
+
 ```
-*   **Web App Frontend:** [http://localhost:3000](http://localhost:3000)
-*   **Backend API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+GEMINI_API_KEY=your_key
+GEMINI_MODEL=gemini-2.0-flash
+JWT_SECRET=generate_random_string
+GOOGLE_CLIENT_ID=from_google_console
+GOOGLE_CLIENT_SECRET=from_google_console
+FRONTEND_URL=https://your-app.up.railway.app
+```
+
+### Step 4: Update Google OAuth
+
+1. Copy your Railway domain
+2. Update redirect URI in Google Cloud Console to:
+   ```
+   https://your-app.up.railway.app/auth/google/callback
+   ```
+3. Redeploy the service
 
 ---
 
-## Manual Local Development
+## Development
+
+### Running Tests
 
 If you prefer to run the components independently:
 
@@ -119,29 +319,54 @@ If you prefer to run the components independently:
 Ingest the CML guidelines document into the vector database (run once):
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python -c "from agent.tools.rag_search import index_pdf_if_needed; index_pdf_if_needed()"
+python -m pytest tests/ -v
 ```
 
-### 2. Start the Backend API
-```bash
-cd backend
-uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
-```
+### Code Style
 
-### 3. Start the Frontend Dev Server
-```bash
-cd frontend
-npm install
-npm run dev
-```
-Open [http://localhost:5173](http://localhost:5173) in your browser.
+- **Backend**: Follow PEP 8
+- **Frontend**: ESLint + Prettier (configured in `package.json`)
 
 ---
 
 ## Medical Disclaimer
 
-> [!WARNING]
-> This application is strictly for informational, educational, and tracking support. It **does not** replace professional medical diagnosis, advice, or treatment. Always consult your hematologist or oncologist before making any changes to your treatment plan or interpreting lab results.
+> **This application is for informational and tracking support only.**
+>
+> It does not replace professional medical diagnosis, advice, or treatment. Always consult your hematologist or oncologist before making any changes to your treatment plan.
+>
+> The AI assistant provides general medical information based on published guidelines. It cannot access real-time medical data or replace clinical judgment.
+
+---
+
+## Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## Acknowledgments
+
+- [Google Gemini API](https://ai.google.dev/) for AI capabilities
+- [ChromaDB](https://www.trychroma.com/) for vector search
+- [MUI](https://mui.com/) for Material-UI components
+- [FastAPI](https://fastapi.tiangolo.com/) for the backend framework
+- CML medical guidelines and research papers
+
+---
+
+<p align="center">
+  Built with care for the CML community
+</p>
