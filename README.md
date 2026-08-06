@@ -313,6 +313,10 @@ FRONTEND_URL=https://your-app.up.railway.app
 
 ### Running Tests
 
+If you prefer to run the components independently:
+
+### 1. Ingest the Guidelines PDF
+Ingest the CML guidelines document into the vector database (run once):
 ```bash
 cd backend
 python -m pytest tests/ -v
