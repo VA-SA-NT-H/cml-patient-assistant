@@ -1,38 +1,44 @@
-# CML Patient Assistant (TKI Side Effect Navigator)
+# CML Patient Assistant: TKI Side Effect Navigator
 
-A web application for Chronic Myeloid Leukemia (CML) patients to navigate Tyrosine Kinase Inhibitor (TKI) side effects, track lab results, and manage their treatment journey.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Python: 3.12](https://img.shields.io/badge/Python-3.12-green.svg)](https://www.python.org/)
+[![React: 19](https://img.shields.io/badge/React-19-blue.svg)](https://react.dev/)
+[![FastAPI: 0.111+](https://img.shields.io/badge/FastAPI-0.111%2B-teal.svg)](https://fastapi.tiangolo.com/)
+[![Gemini: Pro](https://img.shields.io/badge/Gemini-Pro-orange.svg)](https://deepmind.google/technologies/gemini/)
 
-## Features
+An empathetic, intelligent web application designed for **Chronic Myeloid Leukemia (CML)** patients to safely navigate Tyrosine Kinase Inhibitor (TKI) side effects, track lab trends (BCR-ABL1 and CBC metrics), and manage their treatment journey securely.
 
-### Chat Assistant
-- **TKI Info Lookup:** Side effects and clinical red flags for all major TKIs (Imatinib, Dasatinib, Nilotinib, Bosutinib, Ponatinib, Asciminib).
-- **Dietary Interactions:** Food rules, fasting requirements, antacid timing, and supplement exclusions.
-- **Medical Guidelines Search:** RAG-based search over the official CML guidelines PDF using ChromaDB.
-- **Wikipedia Fallback:** General CML/leukemia knowledge when PDF results are insufficient.
-- **Streaming Responses:** Real-time token-by-token chat via WebSocket.
-- **Patient Lab Data Access:** Chatbot retrieves your actual lab results to answer questions about your progress.
+---
 
-### Lab Tracker
-- **Manual Entry:** Add lab results (BCR-ABL1, WBC, platelets, hemoglobin) via form dialog.
-- **File Upload:** Import CSV or PDF lab reports with preview and validation before committing.
-- **Dashboard:** Summary cards showing latest values, current TKI, and total results.
-- **Trend Charts:** Logarithmic BCR-ABL1 chart and CBC trend charts using MUI X Charts.
-- **Treatment Timeline:** Visual timeline of TKI history with current treatment badge.
-- **Milestone Tracking:** CCyR, MMR, MR4, MR4.5 achievement cards.
-- **Warning System:** Automatic alerts for rising BCR-ABL1, loss of MMR/CCyR, severe neutropenia, thrombocytopenia, anemia, and stale data.
-- **Data Encryption:** Fernet encryption for lab values at rest.
+## Key Features
+
+### Empathetic AI Chat Assistant
+*   **TKI Reference Engine:** Instant lookup of side effects and critical clinical "red flags" for all major TKIs (Imatinib, Dasatinib, Nilotinib, Bosutinib, Ponatinib, Asciminib).
+*   **Dietary & Food Rules:** Quick checks for fasting requirements, antacid scheduling, and food/supplement interactions.
+*   **RAG-Powered Guidelines:** Interactive RAG search over official medical guidelines using **ChromaDB**.
+*   **Contextual Bridging:** Warm, lifestyle-focused conversations that creatively bridge general topics (like stress or travel) back to practical CML care.
+*   **Streaming Responses:** Real-time, token-by-token message streaming via WebSockets.
+*   **Lab Integration:** The chatbot securely references your recorded lab values to answer questions about your progress.
+
+### Lab Tracker & Milestone Dashboard
+*   **Flexible Data Entry:** Manually record results or upload CSV/PDF lab reports with validation previews.
+*   **Trend Visualization:** Interactive logarithmic charts for BCR-ABL1 ratio trends and linear charts for CBC metrics (WBC, Platelets, Hemoglobin) built with MUI X Charts.
+*   **Treatment Timeline:** Visual history of TKI treatment shifts showing current and past drugs.
+*   **Milestone Cards:** Automatic achievement tracking for major response milestones: CCyR, MMR, MR4, and MR4.5.
+*   **Safety Warning System:** Visual alerts for loss of response, rising BCR-ABL1 ratios, severe cytopenias (neutropenia, thrombocytopenia, anemia), or outdated lab data.
+*   **Symmetric Encryption:** Fernet cryptography keeps all patient lab results encrypted at rest.
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 19, TypeScript 6, Vite 8, MUI 6, MUI X Charts, react-router-dom |
-| Backend | Python 3.12, FastAPI, WebSocket, SQLite |
-| AI | Gemini API (google-genai), ChromaDB for RAG |
-| Encryption | Fernet symmetric (cryptography) |
-| Containerization | Docker, Docker Compose |
+| Component | Technologies |
+| :--- | :--- |
+| **Frontend** | React 19, TypeScript 6, Vite 8, Material UI (MUI) 6, MUI X Charts, React Router |
+| **Backend** | Python 3.12, FastAPI, WebSockets, SQLite |
+| **AI / RAG** | Gemini API (`google-genai`), ChromaDB Vector Store |
+| **Security** | Fernet Symmetric Encryption (`cryptography` library) |
+| **Deployment** | Docker, Docker Compose |
 
 ---
 
@@ -41,127 +47,101 @@ A web application for Chronic Myeloid Leukemia (CML) patients to navigate Tyrosi
 ```
 ├── backend/
 │   ├── api/
-│   │   ├── main.py              # FastAPI app entry point
-│   │   ├── routes.py            # Session CRUD endpoints
-│   │   ├── lab_routes.py        # Lab results, treatments, upload, dashboard endpoints
-│   │   ├── upload_parser.py     # CSV and PDF parsing
-│   │   └── websocket.py         # WebSocket chat handler with Gemini streaming
+│   │   ├── main.py              # FastAPI application entry point
+│   │   ├── routes.py            # Session CRUD API endpoints
+│   │   ├── lab_routes.py        # Lab records, timeline, and dashboard metrics
+│   │   ├── upload_parser.py     # Parser for CSV/PDF lab report imports
+│   │   └── websocket.py         # WebSocket chat handler with streaming Gemini integration
 │   ├── agent/
-│   │   ├── agent.py             # Gemini client setup and tools
-│   │   └── tools/               # Tool implementations
-│   │       ├── tki_info.py
-│   │       ├── food_rules.py
-│   │       ├── rag_search.py
-│   │       └── wiki_search.py
-│   ├── database.py              # SQLite operations (sessions, messages, lab_results, treatments, milestones)
-│   ├── encryption.py            # Fernet encrypt/decrypt for lab values
-│   ├── lab_warnings.py          # Trend analysis and warning generation
-│   ├── requirements.txt
+│   │   ├── agent.py             # Gemini API client initialization & tools registry
+│   │   └── tools/               # Agent tool executors
+│   │       ├── tki_info.py      # Drug side effects registry
+│   │       ├── food_rules.py    # Food-drug interaction lookup
+│   │       ├── rag_search.py    # Guidelines document indexer & query engine
+│   │       └── wiki_search.py   # Fallback query runner
+│   ├── database.py              # SQLite schemas and database operations
+│   ├── encryption.py            # Fernet encrypt/decrypt helpers
+│   ├── lab_warnings.py          # Trend analysis and safety warning engine
+│   ├── requirements.txt         # Backend Python dependencies
 │   └── Dockerfile
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx              # Main layout with sidebar, chat, and dashboard routing
-│   │   ├── main.tsx             # Entry point with ThemeProvider and BrowserRouter
+│   │   ├── App.tsx              # Main routing & application wrapper
+│   │   ├── main.tsx             # DOM entry point
 │   │   ├── pages/
-│   │   │   └── Dashboard.tsx    # Lab tracker dashboard
-│   │   ├── components/
-│   │   │   ├── ChatMessage.tsx
-│   │   │   ├── ChatInput.tsx
-│   │   │   ├── Sidebar.tsx
-│   │   │   ├── ThemeToggle.tsx
-│   │   │   ├── LabResultsChart.tsx
-│   │   │   ├── CBCChart.tsx
-│   │   │   ├── TreatmentTimeline.tsx
-│   │   │   ├── MilestoneCards.tsx
-│   │   │   ├── DataEntryDialog.tsx
-│   │   │   ├── FileUploadDialog.tsx
-│   │   │   └── WarningBanner.tsx
-│   │   └── theme/
-│   │       └── ThemeProvider.tsx # Dark/light mode with MUI theme
+│   │   │   └── Dashboard.tsx    # Lab tracking dashboard & visualization page
+│   │   ├── components/          # Reusable UI widgets (charts, sidebar, dialogs)
+│   │   └── theme/               # Dark & Light MUI configuration provider
 │   ├── package.json
 │   └── Dockerfile
-├── cml_guide.pdf                 # Medical guidelines for RAG
-├── docker-compose.yml
+├── cml_guide.pdf                 # Reference medical guide for RAG ingestion
+├── docker-compose.yml            # Multi-container orchestrator
 ├── .env.example
 └── README.md
 ```
 
 ---
 
-## Setup Instructions
+## Setup & Installation
 
-### 1. Backend
-
+### 1. Configure the Environment
+Create a `.env` file in the root directory by copying the example template:
 ```bash
-cd backend
-python -m venv venv
-# Windows
-venv\Scripts\activate
-# macOS/Linux
-source venv/bin/activate
-
-pip install -r requirements.txt
+cp .env.example .env
 ```
-
-### 2. Frontend
-
-```bash
-cd frontend
-npm install
-```
-
-### 3. Configure Environment
-
-Copy `.env.example` to `.env` in the project root and fill in your Gemini API key:
-
+Provide your API keys and configuration:
 ```env
 GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_MODEL=gemma-4-31b-it
 ENCRYPTION_KEY=your-fernet-key-here
 ```
+> [!TIP]
+> Generate a secure Fernet encryption key using this command:
+> ```bash
+> python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+> ```
 
-Generate a Fernet key with:
+### 2. Run with Docker (Recommended)
+Launch the entire stack (Frontend, Backend API, and Database) with a single command:
 ```bash
-python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+docker-compose up --build
 ```
-
-### 4. Ingest Guidelines PDF (one-time)
-
-```bash
-cd backend
-python -c "from agent.tools.rag_search import *; # triggers ChromaDB indexing"
-```
+*   **Web App Frontend:** [http://localhost:3000](http://localhost:3000)
+*   **Backend API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ---
 
-## Running Locally
+## Manual Local Development
 
-### Backend
+If you prefer to run the components independently:
+
+### 1. Ingest the Guidelines PDF
+Ingest the CML guidelines document into the vector database (run once):
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+python -c "from agent.tools.rag_search import index_pdf_if_needed; index_pdf_if_needed()"
+```
+
+### 2. Start the Backend API
 ```bash
 cd backend
 uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-API docs available at `http://localhost:8000/docs`.
 
-### Frontend
+### 3. Start the Frontend Dev Server
 ```bash
 cd frontend
+npm install
 npm run dev
 ```
-Open `http://localhost:5173` in your browser.
-
----
-
-## Running with Docker
-
-```bash
-docker-compose up --build
-```
-- Frontend: `http://localhost:3000`
-- Backend API: `http://localhost:8000`
+Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ---
 
 ## Medical Disclaimer
 
-This application is for informational and tracking support only. It does not replace professional medical diagnosis, advice, or treatment. Always consult your hematologist or oncologist before making any changes to your treatment plan.
+> [!WARNING]
+> This application is strictly for informational, educational, and tracking support. It **does not** replace professional medical diagnosis, advice, or treatment. Always consult your hematologist or oncologist before making any changes to your treatment plan or interpreting lab results.
