@@ -2,6 +2,9 @@ import chromadb
 from PyPDF2 import PdfReader
 import json
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 1. Setup local Vector Database
 # Resolved relative to this file: agent/tools/ -> agent/chroma_db
@@ -31,6 +34,52 @@ def ingest_pdf(file_path: str):
         ids=[f"chunk_{i}" for i in range(len(chunks))]
     )
     print("Done! PDF ingested.")
+
+
+def warm_up_embedding_model():
+    """Pre-download the ChromaDB embedding model so first queries aren't slow."""
+    try:
+        count = collection.count()
+        if count == 0:
+            # Empty collection - embedding model hasn't been loaded yet
+            # Force a dummy query to trigger model download
+            logger.info("Pre-downloading ChromaDB embedding model (one-time, ~80MB)...")
+            collection.query(query_texts=["dummy"], n_results=1)
+            logger.info("Embedding model downloaded and cached.")
+        else:
+            logger.info(f"ChromaDB collection has {count} chunks, embedding model already loaded.")
+    except Exception as e:
+        logger.warning(f"Failed to pre-download embedding model: {e}")
+
+
+def ensure_pdf_ingested():
+    """Ingest the CML PDF into ChromaDB if the collection is empty."""
+    count = collection.count()
+    if count > 0:
+        logger.info(f"ChromaDB already has {count} chunks, skipping ingestion.")
+        return
+    
+    # Search for PDF file
+    pdf_filename = "cml_guide.pdf"
+    target_path = None
+    
+    # Check multiple locations
+    candidates = [
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", pdf_filename)),
+        os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", pdf_filename)),
+        os.path.join(os.getcwd(), pdf_filename),
+    ]
+    
+    for path in candidates:
+        if os.path.exists(path):
+            target_path = path
+            break
+    
+    if target_path:
+        logger.info(f"Ingesting PDF from {target_path} into ChromaDB...")
+        ingest_pdf(target_path)
+    else:
+        logger.warning(f"PDF not found at any of: {candidates}. RAG search will have no data.")
 
 def search_medical_guidelines(search_query: str) -> str:
     """The tool our Agent will use to search the PDF."""

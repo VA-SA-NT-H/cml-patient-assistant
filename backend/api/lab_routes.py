@@ -10,7 +10,7 @@ from database import (
     save_treatment, get_treatments, update_treatment, delete_treatment,
     get_milestones, delete_all_lab_data
 )
-from api.upload_parser import parse_csv, parse_pdf
+from api.upload_parser import parse_csv, parse_pdf, parse_image
 from lab_warnings import check_trends
 from datetime import datetime
 
@@ -244,6 +244,12 @@ async def upload_csv(file: UploadFile = File(...)):
 async def upload_pdf(file: UploadFile = File(...)):
     content = await file.read()
     return parse_pdf(content)
+
+
+@router.post("/upload-image")
+async def upload_image(file: UploadFile = File(...)):
+    content = await file.read()
+    return parse_image(content)
 
 
 @router.post("/lab-results/bulk")

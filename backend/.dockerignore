@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.venv/
+
+# Environment variables
+.env
+
+# Databases
+*.db
+*.sqlite3
+data/
+
+# ChromaDB
+chroma_db/
+
+# Test caches
+.pytest_cache/
+.coverage
+
+# IDE
+.vscode/
+.idea/
+
+# OS metadata
+.DS_Store
+Thumbs.db

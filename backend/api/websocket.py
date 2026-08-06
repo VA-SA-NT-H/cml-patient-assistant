@@ -2,6 +2,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 import json
 import sys
 import os
+import asyncio
 
 # Add backend to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -27,32 +28,220 @@ Your primary directive is to relate EVERY user input back to CML, Tyrosine Kinas
 
 When the user asks about their results, blood counts, or treatment progress, always use get_patient_lab_data to retrieve their actual data before responding. Never guess or make up numbers — only use verified data from the tool.
 
+## LAB DATA TOOL USAGE GUIDE
+
+When users ask about their lab results, blood counts, or treatment progress, 
+you MUST use the `get_patient_lab_data` tool.
+
+### Trigger Phrases (ALWAYS use the tool)
+- "What was my last...?"
+- "When was my...?"
+- "How is my...?"
+- "Show me my... trend"
+- "Compare my... before and after..."
+- "What's my latest result?"
+- "Have I achieved...?"
+- "What treatment am I on?"
+- "My blood work / lab results / blood counts"
+- Any question containing: WBC, platelets, hemoglobin, BCR-ABL1, PCR, blood count, lab result
+
+### Tool Parameters
+- `test_type` (optional): The lab test to query
+- `date_range` (optional): Time range for results
+
+### Parameter Mapping
+| User says | test_type | date_range |
+|-----------|-----------|------------|
+| "my WBC" / "white blood cells" | "cbc_wbc" | (omit for all) |
+| "my platelets" | "cbc_platelets" | (omit for all) |
+| "my hemoglobin" / "Hgb" | "cbc_hemoglobin" | (omit for all) |
+| "my BCR-ABL1" / "PCR" | "bcr_abl1" | (omit for all) |
+| "last result" / "latest" | (omit) | "latest" |
+| "last 30 days" | (omit) | "30d" |
+| "last 6 months" | (omit) | "180d" |
+| "all results" / "everything" | (omit) | (omit) |
+
+### Response Patterns
+- **Latest result:** "Your latest [test] was [value] [unit] on [date]."
+- **Trend:** "Your [test] has [improved/stayed stable/declined] from [old] to [new] over [period]."
+- **Milestone:** "You [have/have not] achieved [milestone] (threshold: [value])."
+- **Treatment context:** "This was during your [drug] treatment at [dosage]."
+
+### What NOT to do
+- NEVER guess or make up numbers
+- NEVER say "I don't have access to your data" — use the tool
+- NEVER skip the tool when the user asks about their results
+
+## EDGE CASES
+
+### No Data Available
+If the tool returns empty results or no data for the requested test:
+- Say: "I don't see any [test] results on file yet. Would you like to upload your lab results?"
+- NEVER guess or make up values
+
+### Ambiguous Query
+If the user says "my labs" or "my results" without specifying which test:
+- Call `get_patient_lab_data()` with NO test_type parameter to get ALL results
+- Summarize the most recent results across all test types
+- Ask if they want details on a specific test
+
+### Multiple Results Returned
+If the tool returns multiple results for the same test:
+- Show the most recent result first
+- If the user asked for a trend, show all results in chronological order
+- If the user asked for "latest", only show the most recent
+
+### Treatment Context
+When showing lab results, always include treatment context if available:
+- "This was during your [drug] treatment at [dosage] mg."
+- If no treatment is active, note: "No active treatment recorded."
+
+### Milestone Questions
+When asked about milestones (CCYR, MMR, MR4, MR4.5):
+- Call `get_patient_lab_data()` with test_type "bcr_abl1"
+- Compare the latest BCR-ABL1 value against the milestone threshold
+- State clearly whether the milestone has been achieved
+
+## RESPONSE FORMATTING FOR LAB DATA
+
+### Single Result Format
+```
+Your latest [Test Name] was [Value] [Unit] on [Date].
+
+[Optional: Treatment context line]
+```
+
+### Trend Format (multiple results over time)
+```
+**[Test Name] Trend:**
+- [Date]: [Value] [Unit]
+- [Date]: [Value] [Unit]
+- [Date]: [Value] [Unit]
+
+[Analysis: improved/stable/declined + context]
+```
+
+### Milestone Format
+```
+**Milestone Status:**
+- CCYR (≤1.0%): [Achieved ✓ / Not achieved ✗] — Your BCR-ABL1: [Value]%
+- MMR (≤0.1%): [Achieved ✓ / Not achieved ✗] — Your BCR-ABL1: [Value]%
+```
+
+### Treatment + Lab Correlation Format
+```
+Your [Test Name] was [Value] [Unit] on [Date].
+This was during your [Drug Name] treatment at [Dosage] mg ([Start Date] to [End Date]).
+```
+
+### Always Cite Source
+End every lab data response with:
+```
+Source: Patient's Lab Data
+```
+
 FORMATTING RULES:
 - Use Markdown bullet points to present the information clearly.
 - Explicitly cite your exact source (e.g., "Source: Wikipedia", "Source: Guidelines PDF", "Source: TKI Side Effects Database", "Source: Food Rules Database", or "Source: Patient's Lab Data") at the very end of your response.
 """
 
+def normalize_test_type(test_type: str) -> str:
+    """Normalize test type names from model to database format."""
+    if not test_type:
+        return None
+    
+    test_type_lower = test_type.lower().strip()
+    
+    # Map common variations to database test_type
+    mappings = {
+        "wbc": "cbc_wbc",
+        "white blood cell": "cbc_wbc",
+        "white blood cells": "cbc_wbc",
+        "platelet": "cbc_platelets",
+        "platelets": "cbc_platelets",
+        "hemoglobin": "cbc_hemoglobin",
+        "hgb": "cbc_hemoglobin",
+        "hb": "cbc_hemoglobin",
+        "bcr-abl": "bcr_abl1",
+        "bcr_abl": "bcr_abl1",
+        "bcrabl": "bcr_abl1",
+        "bcr-abl1": "bcr_abl1",
+    }
+    
+    return mappings.get(test_type_lower, test_type_lower)
+
+
+def normalize_date_range(date_range: str) -> str:
+    """Normalize date range from model to expected format."""
+    if not date_range:
+        return None
+    
+    date_range_lower = date_range.lower().strip()
+    
+    # Handle "latest"
+    if date_range_lower == "latest":
+        return "latest"
+    
+    # Handle "last X days/months/years"
+    import re
+    match = re.match(r"last\s+(\d+)\s+(day|days|week|weeks|month|months|year|years)", date_range_lower)
+    if match:
+        num = int(match.group(1))
+        unit = match.group(2)
+        
+        if unit.startswith("day"):
+            return f"{num}d"
+        elif unit.startswith("week"):
+            return f"{num * 7}d"
+        elif unit.startswith("month"):
+            return f"{num * 30}d"
+        elif unit.startswith("year"):
+            return f"{num}y"
+    
+    # Handle "Xm" format (minutes)
+    if date_range_lower.endswith("m"):
+        return date_range_lower
+    
+    # Handle "Xd" format (days)
+    if date_range_lower.endswith("d"):
+        return date_range_lower
+    
+    # Handle "Xy" format (years)
+    if date_range_lower.endswith("y"):
+        return date_range_lower
+    
+    # Default: treat as days if it's a number
+    if date_range_lower.isdigit():
+        return f"{date_range_lower}d"
+    
+    return date_range_lower
+
+
 def get_patient_lab_data(test_type: str = None, date_range: str = None) -> dict:
     """Query patient's lab history for chatbot context."""
     from database import get_lab_results, get_treatments, get_milestones
 
-    lab_results = get_lab_results(test_type)
+    # Normalize parameters
+    normalized_test_type = normalize_test_type(test_type)
+    normalized_date_range = normalize_date_range(date_range)
+    
+    lab_results = get_lab_results(normalized_test_type)
     treatments = get_treatments()
     milestones = get_milestones()
 
     # Filter by date range
-    if date_range and date_range != "all":
+    if normalized_date_range and normalized_date_range != "all":
         now = datetime.now()
-        if date_range == "latest":
+        if normalized_date_range == "latest":
             if lab_results:
                 latest_date = max(r["test_date"] for r in lab_results)
                 lab_results = [r for r in lab_results if r["test_date"] == latest_date]
-        elif date_range.endswith("d"):
-            days = int(date_range.replace("d", ""))
+        elif normalized_date_range.endswith("d"):
+            days = int(normalized_date_range.replace("d", ""))
             cutoff = (now - timedelta(days=days)).strftime("%Y-%m-%d")
             lab_results = [r for r in lab_results if r["test_date"] >= cutoff]
-        elif date_range.endswith("y"):
-            years = int(date_range.replace("y", ""))
+        elif normalized_date_range.endswith("y"):
+            years = int(normalized_date_range.replace("y", ""))
             cutoff = (now - timedelta(days=years * 365)).strftime("%Y-%m-%d")
             lab_results = [r for r in lab_results if r["test_date"] >= cutoff]
 
@@ -102,37 +291,36 @@ async def chat_websocket(websocket: WebSocket):
                 # Send thinking status
                 await websocket.send_json({"type": "status", "content": "Thinking..."})
                 
-                # First model call
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=contents,
-                    config=config
-                )
-                
-                # Check for tool calls
-                if response.function_calls:
+                # Loop: handle tool calls until model returns text
+                for _ in range(5):  # max 5 tool call rounds
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=contents,
+                        config=config
+                    )
+                    
+                    if not response.function_calls:
+                        break  # no tool calls, we have text
+                    
                     for function_call in response.function_calls:
                         name = function_call.name
                         args = function_call.args
                         
-                        # Send tool call status
                         await websocket.send_json({
                             "type": "tool_call",
                             "tool": name,
                             "args": args
                         })
                         
-                        # Execute tool
                         tool_func = tools_map.get(name)
                         if tool_func:
-                            tool_result = tool_func(**args)
+                            tool_result = await asyncio.to_thread(tool_func, **args)
                             await websocket.send_json({
                                 "type": "tool_result",
                                 "tool": name,
-                                "result": str(tool_result)[:500]  # Limit result size
+                                "result": str(tool_result)[:500]
                             })
                             
-                            # Add to conversation
                             contents.append(response.candidates[0].content)
                             contents.append(types.Content(
                                 role="tool",

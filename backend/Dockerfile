@@ -1,11 +1,14 @@
-FROM python:3.11-slim
+FROM python:3.12
 
 WORKDIR /app
 
-RUN pip install --upgrade pip
-
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+
+RUN pip install --no-cache-dir --default-timeout=1000 --retries 10 -r requirements.txt || \
+    pip install --no-cache-dir --default-timeout=1000 --retries 10 -r requirements.txt || \
+    pip install --no-cache-dir --default-timeout=1000 --retries 10 -r requirements.txt
+
+RUN mkdir -p /app/data
 
 COPY . .
 
