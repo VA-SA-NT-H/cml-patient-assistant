@@ -23,6 +23,13 @@ export const FileUploadDialog = ({ open, onClose, onSaved }: Props) => {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const getUploadEndpoint = (fileName: string): string => {
+    if (fileName.endsWith('.csv')) return '/api/upload-csv';
+    if (fileName.endsWith('.pdf')) return '/api/upload-pdf';
+    if (/\.(jpg|jpeg|png)$/i.test(fileName)) return '/api/upload-image';
+    return '/api/upload-csv';
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -32,7 +39,7 @@ export const FileUploadDialog = ({ open, onClose, onSaved }: Props) => {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const endpoint = file.name.endsWith('.csv') ? '/api/upload-csv' : '/api/upload-pdf';
+      const endpoint = getUploadEndpoint(file.name);
       const response = await fetch(`http://localhost:8000${endpoint}`, {
         method: 'POST',
         body: formData,
@@ -76,10 +83,10 @@ export const FileUploadDialog = ({ open, onClose, onSaved }: Props) => {
       <DialogTitle>Upload Lab Report</DialogTitle>
       <DialogContent>
         <Box sx={{ mb: 2 }}>
-          <input ref={fileInputRef} type="file" accept=".csv,.pdf" onChange={handleFileSelect}
+          <input ref={fileInputRef} type="file" accept=".csv,.pdf,.jpg,.jpeg,.png" onChange={handleFileSelect}
             style={{ display: 'none' }} />
           <Button variant="outlined" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-            {uploading ? 'Parsing...' : 'Select CSV or PDF'}
+            {uploading ? 'Parsing...' : 'Select CSV, PDF, or Image'}
           </Button>
           {fileName && <Typography variant="body2" sx={{ ml: 2, display: 'inline' }}>{fileName}</Typography>}
         </Box>

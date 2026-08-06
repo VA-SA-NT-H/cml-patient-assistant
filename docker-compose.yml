@@ -2,23 +2,26 @@ services:
   backend:
     build:
       context: ./backend
-      network: host
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
-      - ./cml_chat_history.db:/app/cml_chat_history.db
+      - ./backend/data:/app/data
+      - chroma_cache:/root/.cache/chroma
     environment:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GEMINI_MODEL=${GEMINI_MODEL}
+      - DATA_DIR=/app/data
     env_file:
       - .env
 
   frontend:
     build:
       context: ./frontend
-      network: host
     ports:
       - "3000:80"
     depends_on:
       - backend
+
+volumes:
+  chroma_cache:

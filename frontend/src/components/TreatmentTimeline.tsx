@@ -8,6 +8,7 @@ interface Treatment {
   dosage_mg: number;
   start_date: string;
   end_date: string | null;
+  reason_for_change: string | null;
 }
 
 export const TreatmentTimeline = () => {
@@ -46,6 +47,11 @@ export const TreatmentTimeline = () => {
             </Typography>
             {t.end_date === null && (
               <Chip size="small" label="Current" color="primary" sx={{ ml: 1 }} />
+            )}
+            {t.reason_for_change && (
+              <Typography variant="caption" display="block" color="text.secondary" sx={{ fontStyle: 'italic', mt: 0.5 }}>
+                {t.reason_for_change}
+              </Typography>
             )}
           </TimelineContent>
         </TimelineItem>

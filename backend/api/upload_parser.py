@@ -112,6 +112,103 @@ def parse_pdf(file_content: bytes) -> list[dict]:
     return results
 
 
+def parse_image(file_content: bytes) -> list[dict]:
+    """Parse a lab report image and extract values via OCR."""
+    results = []
+    if not file_content:
+        results.append({
+            "test_type": "other", "value": "", "unit": "", "test_date": "",
+            "notes": "Empty image file", "valid": False, "error": "Empty image file",
+        })
+        return results
+
+    try:
+        import numpy as np
+        from PIL import Image
+        image = Image.open(io.BytesIO(file_content))
+    except ImportError:
+        results.append({
+            "test_type": "other", "value": "", "unit": "", "test_date": "",
+            "notes": "Image dependencies not installed", "valid": False, "error": "Pillow or numpy not installed",
+        })
+        return results
+    except Exception:
+        results.append({
+            "test_type": "other", "value": "", "unit": "", "test_date": "",
+            "notes": "Could not read image file", "valid": False, "error": "Invalid image file",
+        })
+        return results
+
+    try:
+        from rapidocr_onnxruntime import RapidOCR
+        ocr = RapidOCR()
+        image_array = np.array(image)
+        ocr_result, _ = ocr(image_array)
+        
+        if ocr_result:
+            text = "\n".join([line[1] for line in ocr_result])
+        else:
+            text = ""
+    except ImportError:
+        results.append({
+            "test_type": "other", "value": "", "unit": "", "test_date": "",
+            "notes": "RapidOCR not installed", "valid": False, "error": "rapidocr-onnxruntime not installed",
+        })
+        return results
+    except Exception as e:
+        results.append({
+            "test_type": "other", "value": "", "unit": "", "test_date": "",
+            "notes": f"OCR failed: {str(e)}", "valid": False, "error": f"OCR processing error: {str(e)}",
+        })
+        return results
+
+    patterns = {
+        "bcr_abl1": r"BCR[-\s]*ABL1?\s*[:\s]*(\d+\.?\d*)\s*%?",
+        "cbc_wbc": r"WBC\s*[:\s]*(\d+\.?\d*)\s*(?:x10\^?9/L|10\^9|K/uL)?",
+        "cbc_platelets": r"Plate(?:lets|s)?\s*[:\s]*(\d+\.?\d*)\s*(?:x10\^?9/L|10\^9|K/uL)?",
+        "cbc_hemoglobin": r"(?:Hgb|Hemoglobin|Hb)\s*[:\s]*(\d+\.?\d*)\s*(?:g/dL|g/L)?",
+    }
+
+    date_match = re.search(r"(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})", text)
+    test_date = ""
+    if date_match:
+        raw = date_match.group(1)
+        for fmt in ("%m/%d/%Y", "%m-%d-%Y", "%m/%d/%y", "%m-%d-%y"):
+            try:
+                test_date = datetime.strptime(raw, fmt).strftime("%Y-%m-%d")
+                break
+            except ValueError:
+                continue
+
+    for test_type, pattern in patterns.items():
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            value = match.group(1)
+            unit = _default_unit(test_type)
+            results.append({
+                "test_type": test_type,
+                "value": value,
+                "unit": unit,
+                "test_date": test_date,
+                "notes": "",
+                "valid": True,
+                "error": None,
+            })
+
+    if not results:
+        results.append({
+            "test_type": "other",
+            "value": "",
+            "unit": "",
+            "test_date": test_date,
+            "notes": "Could not parse image — please enter values manually",
+            "valid": False,
+            "error": "No recognized lab values found in image",
+        })
+
+    return results
+
+
 def _is_numeric(value: str) -> bool:
     try:
         float(value)

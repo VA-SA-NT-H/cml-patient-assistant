@@ -2,7 +2,8 @@ import sqlite3
 from datetime import datetime
 from encryption import encrypt_value, decrypt_value
 
-DB_NAME = "cml_chat_history.db"
+import os
+DB_NAME = os.path.join(os.environ.get("DATA_DIR", "."), "cml_chat_history.db")
 
 def init_db():
     """Initializes the local SQLite database."""

@@ -1,11 +1,13 @@
-FROM node:22-alpine AS build
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
-ENV NODE_TLS_REJECT_UNAUTHORIZED=0
+RUN npm config set fetch-timeout 120000 && \
+    npm config set fetch-retry-mintimeout 20000 && \
+    npm config set fetch-retry-maxtimeout 120000
 
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
+RUN npm install --legacy-peer-deps || npm install --legacy-peer-deps --verbose
 
 COPY . .
 RUN npm run build

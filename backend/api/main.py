@@ -1,11 +1,14 @@
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 import os
+import logging
 from dotenv import load_dotenv
 from api.routes import router
 from api.lab_routes import router as lab_router
 from api.websocket import chat_websocket
 from database import init_db
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -58,3 +61,20 @@ async def health():
 @app.websocket("/ws/chat")
 async def websocket_endpoint(websocket: WebSocket):
     await chat_websocket(websocket)
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Pre-download embedding model and ingest PDF on server start."""
+    from agent.tools.rag_search import warm_up_embedding_model, ensure_pdf_ingested
+    import threading
+
+    def _startup_work():
+        try:
+            ensure_pdf_ingested()
+            warm_up_embedding_model()
+        except Exception as e:
+            logger.warning(f"Startup RAG initialization failed: {e}")
+
+    # Run in background thread so server starts immediately
+    threading.Thread(target=_startup_work, daemon=True).start()

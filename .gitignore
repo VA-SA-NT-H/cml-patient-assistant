@@ -16,6 +16,8 @@ ENV/
 
 # Databases
 *.db
+*.sqlite3
+backend/data/
 
 # ChromaDB
 chroma_db/
@@ -27,6 +29,10 @@ node_modules/
 # Build outputs
 frontend/dist/
 frontend/.vite/
+
+# Test caches
+.pytest_cache/
+.coverage
 
 # IDE
 .vscode/
@@ -41,8 +47,11 @@ Thumbs.db
 npm-debug.log*
 
 # Coverage
-.coverage
 htmlcov/
 
-# OpenCode docs
+# Docker volumes (runtime data)
+docker-compose.override.yml
+
+# Docs
 docs/
+
