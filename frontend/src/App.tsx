@@ -8,6 +8,8 @@ import { Sidebar } from './components/Sidebar';
 import { ChatMessage } from './components/ChatMessage';
 import { ChatInput } from './components/ChatInput';
 import { Dashboard } from './pages/Dashboard';
+import { useAuth } from './context/AuthContext';
+import { apiClient } from './api';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -43,6 +45,7 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const isDashboard = location.pathname === '/dashboard';
+  const { token } = useAuth();
 
   const [sessions, setSessions] = useState<Session[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -50,6 +53,10 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [dashboardRefreshKey] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    apiClient.setToken(token);
+  }, [token]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -65,7 +72,7 @@ function App() {
 
   const fetchSessions = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/sessions');
+      const response = await apiClient.get('/api/sessions');
       const data = await response.json();
       setSessions(data);
     } catch (error) {
@@ -76,11 +83,7 @@ function App() {
   const handleNewChat = async (): Promise<string | null> => {
     try {
       const title = formatSessionDate();
-      const response = await fetch('http://localhost:8000/api/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title }),
-      });
+      const response = await apiClient.post('/api/sessions', { title });
       const data = await response.json();
       setSessions([data, ...sessions]);
       setCurrentSessionId(data.session_id);
@@ -99,7 +102,7 @@ function App() {
       navigate('/');
     }
     try {
-      const response = await fetch(`http://localhost:8000/api/sessions/${sessionId}/messages`);
+      const response = await apiClient.get(`/api/sessions/${sessionId}/messages`);
       const data = await response.json();
       setMessages(data);
     } catch (error) {
@@ -109,9 +112,7 @@ function App() {
 
   const handleDeleteSession = async (sessionId: string) => {
     try {
-      await fetch(`http://localhost:8000/api/sessions/${sessionId}`, {
-        method: 'DELETE',
-      });
+      await apiClient.delete(`/api/sessions/${sessionId}`);
       setSessions(sessions.filter(s => s.session_id !== sessionId));
       if (currentSessionId === sessionId) {
         setCurrentSessionId(null);
@@ -124,11 +125,7 @@ function App() {
 
   const handleRenameSession = async (sessionId: string, newTitle: string) => {
     try {
-      await fetch(`http://localhost:8000/api/sessions/${sessionId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: newTitle }),
-      });
+      await apiClient.put(`/api/sessions/${sessionId}`, { title: newTitle });
       setSessions(sessions.map(s =>
         s.session_id === sessionId ? { ...s, title: newTitle } : s
       ));
@@ -148,7 +145,7 @@ function App() {
     setIsLoading(true);
 
     try {
-      const ws = new WebSocket('ws://localhost:8000/ws/chat');
+      const ws = new WebSocket(apiClient.getWsUrl());
 
       ws.onopen = () => {
         ws.send(JSON.stringify({

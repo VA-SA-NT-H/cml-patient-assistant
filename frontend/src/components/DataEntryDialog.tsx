@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, MenuItem, Box } from '@mui/material';
+import { apiClient } from '../api';
 
 interface Props {
   open: boolean;
@@ -44,11 +45,7 @@ export const DataEntryDialog = ({ open, onClose, onSaved }: Props) => {
     }
 
     try {
-      await fetch('http://localhost:8000/api/lab-results', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ test_type: testType, value, unit, test_date: testDate, notes }),
-      });
+      await apiClient.post('/api/lab-results', { test_type: testType, value, unit, test_date: testDate, notes });
       setValue('');
       setNotes('');
       setError('');

@@ -19,6 +19,7 @@ import { FileUploadDialog } from '../components/FileUploadDialog';
 import { OtherResults } from '../components/OtherResults';
 import { LabResultsTable } from '../components/LabResultsTable';
 import { useTheme } from '../theme/ThemeProvider';
+import { apiClient } from '../api';
 
 interface DashboardData {
   latest_values: Record<string, { value: string; unit: string; test_date: string }>;
@@ -45,7 +46,7 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
   const fetchDashboard = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:8000/api/dashboard');
+      const response = await apiClient.get('/api/dashboard');
       const result = await response.json();
       setData(result);
     } catch (error) {
@@ -62,7 +63,7 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
   const handleReset = async () => {
     try {
       setResetting(true);
-      await fetch('http://localhost:8000/api/reset', { method: 'DELETE' });
+      await apiClient.delete('/api/reset');
       setResetDialogOpen(false);
       await fetchDashboard();
     } catch (error) {

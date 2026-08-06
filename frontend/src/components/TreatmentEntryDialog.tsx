@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, MenuItem, Box } from '@mui/material';
+import { apiClient } from '../api';
 
 interface Props {
   open: boolean;
@@ -35,16 +36,12 @@ export const TreatmentEntryDialog = ({ open, onClose, onSaved }: Props) => {
     }
 
     try {
-      await fetch('http://localhost:8000/api/treatments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          drug_name: drugName,
-          dosage_mg: parseInt(dosage),
-          start_date: startDate,
-          end_date: endDate || null,
-          reason_for_change: reason || null,
-        }),
+      await apiClient.post('/api/treatments', {
+        drug_name: drugName,
+        dosage_mg: parseInt(dosage),
+        start_date: startDate,
+        end_date: endDate || null,
+        reason_for_change: reason || null,
       });
       setDrugName('');
       setDosage('');

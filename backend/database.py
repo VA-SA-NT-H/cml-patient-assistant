@@ -5,10 +5,65 @@ from encryption import encrypt_value, decrypt_value
 import os
 DB_NAME = os.path.join(os.environ.get("DATA_DIR", "."), "cml_chat_history.db")
 
+def get_db_connection():
+    """Get a database connection with row factory."""
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def create_user(user_id: str, email: str, name: str = None, picture_url: str = None) -> dict:
+    """Create or update a user from Google OAuth."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute("""
+        INSERT INTO users (user_id, email, name, picture_url, created_at, last_login)
+        VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+        ON CONFLICT(user_id) DO UPDATE SET
+            last_login = datetime('now'),
+            name = COALESCE(excluded.name, users.name),
+            picture_url = COALESCE(excluded.picture_url, users.picture_url)
+    """, (user_id, email, name, picture_url))
+    
+    conn.commit()
+    user = get_user_by_id(user_id)
+    conn.close()
+    return user
+
+def get_user_by_id(user_id: str) -> dict:
+    """Get user by Google OAuth subject ID."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_user_by_email(email: str) -> dict:
+    """Get user by email address."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
 def init_db():
     """Initializes the local SQLite database."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
+    
+    # Table for users (Google OAuth)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            user_id TEXT PRIMARY KEY,
+            email TEXT NOT NULL UNIQUE,
+            name TEXT,
+            picture_url TEXT,
+            created_at TEXT NOT NULL,
+            last_login TEXT
+        )
+    ''')
     
     # Table for chat sessions
     cursor.execute('''
@@ -83,17 +138,53 @@ def init_db():
             )
     conn.commit()
     conn.close()
+    
+    # Run migration to add user_id columns
+    migrate_add_user_id()
 
-def create_new_session(session_id: str, title: str):
+def migrate_add_user_id():
+    """Add user_id column to all data tables if not exists."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    
+    # Check if user_id column exists in sessions
+    cursor.execute("PRAGMA table_info(sessions)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if "user_id" not in columns:
+        cursor.execute("ALTER TABLE sessions ADD COLUMN user_id TEXT REFERENCES users(user_id)")
+    
+    # Check if user_id column exists in lab_results
+    cursor.execute("PRAGMA table_info(lab_results)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if "user_id" not in columns:
+        cursor.execute("ALTER TABLE lab_results ADD COLUMN user_id TEXT REFERENCES users(user_id)")
+    
+    # Check if user_id column exists in treatments
+    cursor.execute("PRAGMA table_info(treatments)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if "user_id" not in columns:
+        cursor.execute("ALTER TABLE treatments ADD COLUMN user_id TEXT REFERENCES users(user_id)")
+    
+    # Check if user_id column exists in milestones
+    cursor.execute("PRAGMA table_info(milestones)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if "user_id" not in columns:
+        cursor.execute("ALTER TABLE milestones ADD COLUMN user_id TEXT REFERENCES users(user_id)")
+    
+    conn.commit()
+    conn.close()
+
+def create_new_session(session_id: str, title: str, user_id: str = None):
     """Creates a new chat session."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT OR IGNORE INTO sessions (session_id, title, created_at) VALUES (?, ?, ?)",
-        (session_id, title, datetime.now().strftime("%Y-%m-%d %H:%M"))
+        "INSERT OR IGNORE INTO sessions (session_id, title, created_at, user_id) VALUES (?, ?, ?, ?)",
+        (session_id, title, datetime.now().strftime("%Y-%m-%d %H:%M"), user_id)
     )
     conn.commit()
     conn.close()
+    return session_id
 
 def save_message(session_id: str, role: str, content: str):
     """Saves a single message to the local database."""
@@ -106,11 +197,14 @@ def save_message(session_id: str, role: str, content: str):
     conn.commit()
     conn.close()
 
-def get_all_sessions():
+def get_all_sessions(user_id: str = None):
     """Retrieves all past chat sessions for the sidebar."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute("SELECT session_id, title, created_at FROM sessions ORDER BY created_at DESC")
+    if user_id:
+        cursor.execute("SELECT session_id, title, created_at FROM sessions WHERE user_id = ? ORDER BY created_at DESC", (user_id,))
+    else:
+        cursor.execute("SELECT session_id, title, created_at FROM sessions ORDER BY created_at DESC")
     sessions = cursor.fetchall()
     conn.close()
     return sessions
@@ -142,15 +236,15 @@ def rename_session(session_id: str, new_title: str):
     conn.close()
 
 def save_lab_result(test_type: str, value: str, unit: str, test_date: str,
-                    reference_range: str = None, notes: str = None) -> int:
+                    reference_range: str = None, notes: str = None, user_id: str = None) -> int:
     """Save a lab result with encrypted value. Returns the new row ID."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     encrypted_value = encrypt_value(value)
     cursor.execute(
-        "INSERT INTO lab_results (test_type, value, unit, reference_range, test_date, notes, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO lab_results (test_type, value, unit, reference_range, test_date, notes, created_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (test_type, encrypted_value, unit, reference_range, test_date, notes,
-         datetime.now().strftime("%Y-%m-%d %H:%M"))
+         datetime.now().strftime("%Y-%m-%d %H:%M"), user_id)
     )
     row_id = cursor.lastrowid
     conn.commit()
@@ -158,16 +252,32 @@ def save_lab_result(test_type: str, value: str, unit: str, test_date: str,
     return row_id
 
 
-def get_lab_results(test_type: str = None):
-    """Retrieve lab results with decrypted values. Optional filter by test_type."""
+def get_lab_results(test_type: str = None, user_id: str = None):
+    """Retrieve lab results with decrypted values. Optional filter by test_type and user_id."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
+    
+    query = "SELECT id, test_type, value, unit, reference_range, test_date, notes, created_at FROM lab_results"
+    params = []
+    conditions = []
+    
+    if user_id:
+        conditions.append("user_id = ?")
+        params.append(user_id)
+    
     if test_type:
-        cursor.execute("SELECT id, test_type, value, unit, reference_range, test_date, notes, created_at FROM lab_results WHERE test_type = ? ORDER BY test_date ASC", (test_type,))
-    else:
-        cursor.execute("SELECT id, test_type, value, unit, reference_range, test_date, notes, created_at FROM lab_results ORDER BY test_date ASC")
+        conditions.append("test_type = ?")
+        params.append(test_type)
+    
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+    
+    query += " ORDER BY test_date ASC"
+    
+    cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
+    
     return [
         {
             "id": r[0], "test_type": r[1], "value": decrypt_value(r[2]),
@@ -205,14 +315,14 @@ def delete_lab_result(row_id: int):
     conn.close()
 
 def save_treatment(drug_name: str, dosage_mg: int, start_date: str,
-                   end_date: str = None, reason_for_change: str = None) -> int:
+                   end_date: str = None, reason_for_change: str = None, user_id: str = None) -> int:
     """Save a treatment record. Returns the new row ID."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO treatments (drug_name, dosage_mg, start_date, end_date, reason_for_change, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO treatments (drug_name, dosage_mg, start_date, end_date, reason_for_change, created_at, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
         (drug_name, dosage_mg, start_date, end_date, reason_for_change,
-         datetime.now().strftime("%Y-%m-%d %H:%M"))
+         datetime.now().strftime("%Y-%m-%d %H:%M"), user_id)
     )
     row_id = cursor.lastrowid
     conn.commit()
@@ -220,11 +330,21 @@ def save_treatment(drug_name: str, dosage_mg: int, start_date: str,
     return row_id
 
 
-def get_treatments():
-    """Retrieve all treatments ordered by start_date."""
+def get_treatments(user_id: str = None):
+    """Retrieve all treatments ordered by start_date. Optional filter by user_id."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, drug_name, dosage_mg, start_date, end_date, reason_for_change FROM treatments ORDER BY start_date ASC")
+    
+    query = "SELECT id, drug_name, dosage_mg, start_date, end_date, reason_for_change FROM treatments"
+    params = []
+    
+    if user_id:
+        query += " WHERE user_id = ?"
+        params.append(user_id)
+    
+    query += " ORDER BY start_date ASC"
+    
+    cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
     return [
@@ -297,11 +417,19 @@ def save_milestone(milestone_type: str, achieved: bool, achieved_date: str = Non
     conn.close()
 
 
-def get_milestones():
-    """Retrieve all milestones."""
+def get_milestones(user_id: str = None):
+    """Retrieve all milestones. Optional filter by user_id."""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, milestone_type, achieved, achieved_date, value_at_achievement FROM milestones")
+    
+    query = "SELECT id, milestone_type, achieved, achieved_date, value_at_achievement FROM milestones"
+    params = []
+    
+    if user_id:
+        query += " WHERE user_id = ?"
+        params.append(user_id)
+    
+    cursor.execute(query, params)
     rows = cursor.fetchall()
     conn.close()
     return [
