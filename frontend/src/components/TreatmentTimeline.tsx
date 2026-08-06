@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Typography, Chip } from '@mui/material';
 import { Timeline, TimelineItem, TimelineSeparator, TimelineConnector, TimelineDot, TimelineContent } from '@mui/lab';
+import { apiClient } from '../api';
 
 interface Treatment {
   id: number;
@@ -18,7 +19,7 @@ export const TreatmentTimeline = () => {
 
   const fetchTreatments = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/treatments');
+      const response = await apiClient.get('/api/treatments');
       const data = await response.json();
       setTreatments(data);
     } catch (error) {

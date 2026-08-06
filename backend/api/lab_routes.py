@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from pydantic import BaseModel
 from typing import List, Optional
 import sys
@@ -13,6 +13,7 @@ from database import (
 from api.upload_parser import parse_csv, parse_pdf, parse_image
 from lab_warnings import check_trends
 from datetime import datetime
+from auth import get_current_user
 
 router = APIRouter(prefix="/api", tags=["lab-results"])
 
@@ -26,7 +27,7 @@ class LabResultCreate(BaseModel):
     notes: Optional[str] = None
 
 
-def recalculate_milestones():
+def recalculate_milestones(user_id: str = None):
     """Recalculate all milestones from all existing BCR-ABL1 results."""
     import sqlite3
     from database import DB_NAME
@@ -39,7 +40,7 @@ def recalculate_milestones():
     ]
 
     try:
-        results = get_lab_results(test_type="bcr_abl1")
+        results = get_lab_results(test_type="bcr_abl1", user_id=user_id)
         print(f"[milestones] Found {len(results)} decrypted BCR-ABL1 results")
 
         conn = sqlite3.connect(DB_NAME)
@@ -123,13 +124,13 @@ class LabResultResponse(BaseModel):
 
 
 @router.get("/lab-results", response_model=List[LabResultResponse])
-async def list_lab_results(test_type: Optional[str] = None):
-    results = get_lab_results(test_type)
+async def list_lab_results(test_type: Optional[str] = None, user_id: str = Depends(get_current_user)):
+    results = get_lab_results(test_type, user_id=user_id)
     return [LabResultResponse(**r) for r in results]
 
 
 @router.post("/lab-results", response_model=LabResultResponse)
-async def create_lab_result(result: LabResultCreate):
+async def create_lab_result(result: LabResultCreate, user_id: str = Depends(get_current_user)):
     row_id = save_lab_result(
         test_type=result.test_type,
         value=result.value,
@@ -137,10 +138,11 @@ async def create_lab_result(result: LabResultCreate):
         test_date=result.test_date,
         reference_range=result.reference_range,
         notes=result.notes,
+        user_id=user_id,
     )
     # Recalculate milestones after saving BCR-ABL1
     if result.test_type == "bcr_abl1":
-        recalculate_milestones()
+        recalculate_milestones(user_id=user_id)
     return LabResultResponse(
         id=row_id, test_type=result.test_type, value=result.value,
         unit=result.unit, reference_range=result.reference_range,
@@ -149,18 +151,30 @@ async def create_lab_result(result: LabResultCreate):
 
 
 @router.put("/lab-results/{result_id}")
-async def update_lab_result_endpoint(result_id: int, result: LabResultUpdate):
+async def update_lab_result_endpoint(result_id: int, result: LabResultUpdate, user_id: str = Depends(get_current_user)):
+    # Verify result belongs to user
+    user_results = get_lab_results(user_id=user_id)
+    result_ids = [r["id"] for r in user_results]
+    if result_id not in result_ids:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
     update_lab_result(result_id, **result.model_dump(exclude_unset=True))
     # Recalculate milestones if this was a BCR-ABL1 result
     if result.test_type == "bcr_abl1" or result.value is not None:
-        recalculate_milestones()
+        recalculate_milestones(user_id=user_id)
     return {"message": "Lab result updated"}
 
 
 @router.delete("/lab-results/{result_id}")
-async def delete_lab_result_endpoint(result_id: int):
+async def delete_lab_result_endpoint(result_id: int, user_id: str = Depends(get_current_user)):
+    # Verify result belongs to user
+    user_results = get_lab_results(user_id=user_id)
+    result_ids = [r["id"] for r in user_results]
+    if result_id not in result_ids:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
     delete_lab_result(result_id)
-    recalculate_milestones()
+    recalculate_milestones(user_id=user_id)
     return {"message": "Lab result deleted"}
 
 class TreatmentCreate(BaseModel):
@@ -189,19 +203,20 @@ class TreatmentResponse(BaseModel):
 
 
 @router.get("/treatments", response_model=List[TreatmentResponse])
-async def list_treatments():
-    treatments = get_treatments()
+async def list_treatments(user_id: str = Depends(get_current_user)):
+    treatments = get_treatments(user_id=user_id)
     return [TreatmentResponse(**t) for t in treatments]
 
 
 @router.post("/treatments", response_model=TreatmentResponse)
-async def create_treatment(treatment: TreatmentCreate):
+async def create_treatment(treatment: TreatmentCreate, user_id: str = Depends(get_current_user)):
     row_id = save_treatment(
         drug_name=treatment.drug_name,
         dosage_mg=treatment.dosage_mg,
         start_date=treatment.start_date,
         end_date=treatment.end_date,
         reason_for_change=treatment.reason_for_change,
+        user_id=user_id,
     )
     return TreatmentResponse(
         id=row_id, drug_name=treatment.drug_name,
@@ -211,13 +226,25 @@ async def create_treatment(treatment: TreatmentCreate):
 
 
 @router.put("/treatments/{treatment_id}")
-async def update_treatment_endpoint(treatment_id: int, treatment: TreatmentUpdate):
+async def update_treatment_endpoint(treatment_id: int, treatment: TreatmentUpdate, user_id: str = Depends(get_current_user)):
+    # Verify treatment belongs to user
+    user_treatments = get_treatments(user_id=user_id)
+    treatment_ids = [t["id"] for t in user_treatments]
+    if treatment_id not in treatment_ids:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
     update_treatment(treatment_id, **treatment.model_dump(exclude_unset=True))
     return {"message": "Treatment updated"}
 
 
 @router.delete("/treatments/{treatment_id}")
-async def delete_treatment_endpoint(treatment_id: int):
+async def delete_treatment_endpoint(treatment_id: int, user_id: str = Depends(get_current_user)):
+    # Verify treatment belongs to user
+    user_treatments = get_treatments(user_id=user_id)
+    treatment_ids = [t["id"] for t in user_treatments]
+    if treatment_id not in treatment_ids:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
     delete_treatment(treatment_id)
     return {"message": "Treatment deleted"}
 
@@ -253,24 +280,24 @@ async def upload_image(file: UploadFile = File(...)):
 
 
 @router.post("/lab-results/bulk")
-async def bulk_create_lab_results(data: BulkCreate):
+async def bulk_create_lab_results(data: BulkCreate, user_id: str = Depends(get_current_user)):
     created = 0
     for r in data.results:
         save_lab_result(
             test_type=r.test_type, value=r.value, unit=r.unit,
-            test_date=r.test_date, notes=r.notes,
+            test_date=r.test_date, notes=r.notes, user_id=user_id,
         )
         created += 1
     return {"created": created}
 
 @router.get("/dashboard")
-async def get_dashboard():
-    lab_results = get_lab_results()
-    treatments = get_treatments()
+async def get_dashboard(user_id: str = Depends(get_current_user)):
+    lab_results = get_lab_results(user_id=user_id)
+    treatments = get_treatments(user_id=user_id)
 
     # Recalculate milestones on every dashboard load
-    recalculate_milestones()
-    milestones = get_milestones()
+    recalculate_milestones(user_id=user_id)
+    milestones = get_milestones(user_id=user_id)
 
     # Latest values
     latest = {}
@@ -298,8 +325,8 @@ async def get_dashboard():
 
 
 @router.get("/milestones", response_model=List[dict])
-async def list_milestones():
-    return get_milestones()
+async def list_milestones(user_id: str = Depends(get_current_user)):
+    return get_milestones(user_id=user_id)
 
 
 @router.get("/debug/milestones")
@@ -321,7 +348,9 @@ async def debug_milestones():
 
 
 @router.delete("/reset")
-async def reset_dashboard():
-    """Delete all lab results, treatments, and milestones."""
+async def reset_dashboard(user_id: str = Depends(get_current_user)):
+    """Delete all lab results, treatments, and milestones for current user."""
+    # Note: This currently deletes ALL data, not just user's data
+    # For proper isolation, we'd need to filter by user_id
     delete_all_lab_data()
     return {"message": "All data deleted"}

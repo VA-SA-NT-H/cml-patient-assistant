@@ -217,7 +217,7 @@ def normalize_date_range(date_range: str) -> str:
     return date_range_lower
 
 
-def get_patient_lab_data(test_type: str = None, date_range: str = None) -> dict:
+def get_patient_lab_data(test_type: str = None, date_range: str = None, user_id: str = None) -> dict:
     """Query patient's lab history for chatbot context."""
     from database import get_lab_results, get_treatments, get_milestones
 
@@ -225,9 +225,9 @@ def get_patient_lab_data(test_type: str = None, date_range: str = None) -> dict:
     normalized_test_type = normalize_test_type(test_type)
     normalized_date_range = normalize_date_range(date_range)
     
-    lab_results = get_lab_results(normalized_test_type)
-    treatments = get_treatments()
-    milestones = get_milestones()
+    lab_results = get_lab_results(normalized_test_type, user_id=user_id)
+    treatments = get_treatments(user_id=user_id)
+    milestones = get_milestones(user_id=user_id)
 
     # Filter by date range
     if normalized_date_range and normalized_date_range != "all":
@@ -262,7 +262,7 @@ tools_map = {
 tools = [lookup_tki_info, lookup_food_interactions, search_medical_guidelines, search_wikipedia, get_patient_lab_data]
 
 
-async def chat_websocket(websocket: WebSocket):
+async def chat_websocket(websocket: WebSocket, user_id: str):
     await websocket.accept()
     
     try:
@@ -305,6 +305,10 @@ async def chat_websocket(websocket: WebSocket):
                     for function_call in response.function_calls:
                         name = function_call.name
                         args = function_call.args
+                        
+                        # Add user_id to lab data tool calls
+                        if name == "get_patient_lab_data":
+                            args["user_id"] = user_id
                         
                         await websocket.send_json({
                             "type": "tool_call",

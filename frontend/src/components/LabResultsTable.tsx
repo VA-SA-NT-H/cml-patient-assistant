@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Box, Typography, Card, CardContent, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import { apiClient } from '../api';
 
 interface LabResult {
   id: number;
@@ -37,7 +38,7 @@ export const LabResultsTable = ({ refreshKey = 0, onRefresh }: Props) => {
 
   const fetchResults = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/lab-results');
+      const response = await apiClient.get('/api/lab-results');
       const data = await response.json();
       setResults(data.sort((a: LabResult, b: LabResult) => b.test_date.localeCompare(a.test_date)));
     } catch (error) {
@@ -56,11 +57,7 @@ export const LabResultsTable = ({ refreshKey = 0, onRefresh }: Props) => {
   const handleSaveEdit = async () => {
     if (!selected) return;
     try {
-      await fetch(`http://localhost:8000/api/lab-results/${selected.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value: editValue, test_date: editDate, notes: editNotes }),
-      });
+      await apiClient.put(`/api/lab-results/${selected.id}`, { value: editValue, test_date: editDate, notes: editNotes });
       setEditOpen(false);
       fetchResults();
       onRefresh?.();
@@ -72,7 +69,7 @@ export const LabResultsTable = ({ refreshKey = 0, onRefresh }: Props) => {
   const handleDelete = async () => {
     if (!selected) return;
     try {
-      await fetch(`http://localhost:8000/api/lab-results/${selected.id}`, { method: 'DELETE' });
+      await apiClient.delete(`/api/lab-results/${selected.id}`);
       setDeleteOpen(false);
       fetchResults();
       onRefresh?.();

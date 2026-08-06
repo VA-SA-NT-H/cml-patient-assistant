@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip } from '@mui/material';
+import { apiClient } from '../api';
 
 interface ParsedRow {
   test_type: string;
@@ -40,8 +41,10 @@ export const FileUploadDialog = ({ open, onClose, onSaved }: Props) => {
       const formData = new FormData();
       formData.append('file', file);
       const endpoint = getUploadEndpoint(file.name);
-      const response = await fetch(`http://localhost:8000${endpoint}`, {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${apiClient.getBaseUrl()}${endpoint}`, {
         method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
         body: formData,
       });
       const rows = await response.json();
@@ -58,11 +61,7 @@ export const FileUploadDialog = ({ open, onClose, onSaved }: Props) => {
     if (validRows.length === 0) return;
 
     try {
-      await fetch('http://localhost:8000/api/lab-results/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ results: validRows }),
-      });
+      await apiClient.post('/api/lab-results/bulk', { results: validRows });
       setParsedRows([]);
       setFileName('');
       onSaved();

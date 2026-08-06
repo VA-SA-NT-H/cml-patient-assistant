@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Box, Typography, Card, CardContent } from '@mui/material';
 import ScienceIcon from '@mui/icons-material/Science';
+import { apiClient } from '../api';
 
 interface LabResult {
   id: number;
@@ -20,7 +21,7 @@ export const OtherResults = () => {
 
   const fetchOtherResults = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/lab-results');
+      const response = await apiClient.get('/api/lab-results');
       const data = await response.json();
       const otherResults = data.filter((r: LabResult) =>
         !['bcr_abl1', 'cbc_wbc', 'cbc_platelets', 'cbc_hemoglobin'].includes(r.test_type)
