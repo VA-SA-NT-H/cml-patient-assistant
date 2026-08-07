@@ -54,100 +54,105 @@ def get_user_by_email(email: str) -> dict:
 
 def init_db():
     """Initializes the PostgreSQL database schema."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            user_id TEXT PRIMARY KEY,
-            email TEXT NOT NULL UNIQUE,
-            name TEXT,
-            picture_url TEXT,
-            created_at TEXT NOT NULL,
-            last_login TEXT
-        )
-    ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                user_id TEXT PRIMARY KEY,
+                email TEXT NOT NULL UNIQUE,
+                name TEXT,
+                picture_url TEXT,
+                created_at TEXT NOT NULL,
+                last_login TEXT
+            )
+        ''')
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS sessions (
-            session_id TEXT PRIMARY KEY,
-            title TEXT,
-            created_at TEXT,
-            user_id TEXT REFERENCES users(user_id)
-        )
-    ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS sessions (
+                session_id TEXT PRIMARY KEY,
+                title TEXT,
+                created_at TEXT,
+                user_id TEXT REFERENCES users(user_id)
+            )
+        ''')
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS messages (
-            id SERIAL PRIMARY KEY,
-            session_id TEXT,
-            role TEXT,
-            content TEXT,
-            FOREIGN KEY (session_id) REFERENCES sessions (session_id)
-        )
-    ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS messages (
+                id SERIAL PRIMARY KEY,
+                session_id TEXT,
+                role TEXT,
+                content TEXT,
+                FOREIGN KEY (session_id) REFERENCES sessions (session_id)
+            )
+        ''')
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS lab_results (
-            id SERIAL PRIMARY KEY,
-            test_type TEXT NOT NULL,
-            value TEXT NOT NULL,
-            unit TEXT NOT NULL,
-            reference_range TEXT,
-            test_date TEXT NOT NULL,
-            notes TEXT,
-            created_at TEXT NOT NULL,
-            user_id TEXT REFERENCES users(user_id)
-        )
-    ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS lab_results (
+                id SERIAL PRIMARY KEY,
+                test_type TEXT NOT NULL,
+                value TEXT NOT NULL,
+                unit TEXT NOT NULL,
+                reference_range TEXT,
+                test_date TEXT NOT NULL,
+                notes TEXT,
+                created_at TEXT NOT NULL,
+                user_id TEXT REFERENCES users(user_id)
+            )
+        ''')
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS treatments (
-            id SERIAL PRIMARY KEY,
-            drug_name TEXT NOT NULL,
-            dosage_mg INTEGER NOT NULL,
-            start_date TEXT NOT NULL,
-            end_date TEXT,
-            reason_for_change TEXT,
-            created_at TEXT NOT NULL,
-            user_id TEXT REFERENCES users(user_id)
-        )
-    ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS treatments (
+                id SERIAL PRIMARY KEY,
+                drug_name TEXT NOT NULL,
+                dosage_mg INTEGER NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT,
+                reason_for_change TEXT,
+                created_at TEXT NOT NULL,
+                user_id TEXT REFERENCES users(user_id)
+            )
+        ''')
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS milestones (
-            id SERIAL PRIMARY KEY,
-            milestone_type TEXT NOT NULL,
-            achieved INTEGER NOT NULL DEFAULT 0,
-            achieved_date TEXT,
-            value_at_achievement TEXT,
-            user_id TEXT REFERENCES users(user_id)
-        )
-    ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS milestones (
+                id SERIAL PRIMARY KEY,
+                milestone_type TEXT NOT NULL,
+                achieved INTEGER NOT NULL DEFAULT 0,
+                achieved_date TEXT,
+                value_at_achievement TEXT,
+                user_id TEXT REFERENCES users(user_id)
+            )
+        ''')
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS checkup_records (
-            id SERIAL PRIMARY KEY,
-            checkup_date TEXT NOT NULL,
-            doctor_advice TEXT,
-            medications_bought TEXT,
-            medication_cost TEXT,
-            created_at TEXT NOT NULL,
-            user_id TEXT REFERENCES users(user_id)
-        )
-    ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS checkup_records (
+                id SERIAL PRIMARY KEY,
+                checkup_date TEXT NOT NULL,
+                doctor_advice TEXT,
+                medications_bought TEXT,
+                medication_cost TEXT,
+                created_at TEXT NOT NULL,
+                user_id TEXT REFERENCES users(user_id)
+            )
+        ''')
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS user_settings (
-            key TEXT NOT NULL,
-            value TEXT NOT NULL,
-            user_id TEXT REFERENCES users(user_id),
-            PRIMARY KEY (key, user_id)
-        )
-    ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_settings (
+                key TEXT NOT NULL,
+                value TEXT NOT NULL,
+                user_id TEXT REFERENCES users(user_id),
+                PRIMARY KEY (key, user_id)
+            )
+        ''')
 
-    conn.commit()
-    conn.close()
+        conn.commit()
+        conn.close()
+        print("[init_db] Database initialized successfully")
+    except Exception as e:
+        print(f"[init_db] WARNING: Database initialization failed: {e}")
+        print("[init_db] The app will continue starting. Tables will be created on first successful connection.")
 
 
 def create_new_session(session_id: str, title: str, user_id: str = None):

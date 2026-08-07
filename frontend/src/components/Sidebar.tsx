@@ -29,7 +29,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import MedicalServicesIcon from '@mui/icons-material/MedicalServices';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+
 import SettingsIcon from '@mui/icons-material/Settings';
 import { ThemeToggle } from './ThemeToggle';
 import { useAuth } from '../context/AuthContext';
