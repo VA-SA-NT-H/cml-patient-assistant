@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Box, Typography, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import EventIcon from '@mui/icons-material/Event';
 import ChecklistIcon from '@mui/icons-material/Checklist';
@@ -6,30 +6,18 @@ import { useTheme } from '../theme/ThemeProvider';
 import { apiClient } from '../api';
 import { formatDate } from '../utils/formatDate';
 
-export const NextCheckup = () => {
-  const [nextDate, setNextDate] = useState<string | null>(null);
-  const [bringItems, setBringItems] = useState<string>('');
+interface NextCheckupProps {
+  date: string | null;
+  bringItems: string | null;
+}
+
+export const NextCheckup = ({ date, bringItems }: NextCheckupProps) => {
+  const [nextDate, setNextDate] = useState<string | null>(date);
+  const [bringItemsText, setBringItems] = useState<string>(bringItems || '');
   const { mode } = useTheme();
   const [editOpen, setEditOpen] = useState(false);
   const [formDate, setFormDate] = useState('');
   const [formBringItems, setFormBringItems] = useState('');
-
-  useEffect(() => { fetchSettings(); }, []);
-
-  const fetchSettings = async () => {
-    try {
-      const [dateRes, itemsRes] = await Promise.all([
-        apiClient.get('/api/settings/next_checkup_date'),
-        apiClient.get('/api/settings/next_checkup_bring_items'),
-      ]);
-      const dateData = await dateRes.json();
-      const itemsData = await itemsRes.json();
-      if (dateData.value) setNextDate(dateData.value);
-      if (itemsData.value) setBringItems(itemsData.value);
-    } catch (error) {
-      console.error('Failed to fetch settings:', error);
-    }
-  };
 
   const handleSave = async () => {
     try {
@@ -135,7 +123,7 @@ export const NextCheckup = () => {
           size="small"
           onClick={() => {
             setFormDate(nextDate || new Date().toISOString().split('T')[0]);
-            setFormBringItems(bringItems);
+            setFormBringItems(bringItemsText);
             setEditOpen(true);
           }}
           sx={{ textTransform: 'none', fontSize: '0.75rem' }}
@@ -145,7 +133,7 @@ export const NextCheckup = () => {
       </Box>
 
       {/* Bring items display */}
-      {bringItems && (
+      {bringItemsText && (
         <Box
           sx={{
             mt: 1.5,
@@ -165,7 +153,7 @@ export const NextCheckup = () => {
               Bring to your appointment
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem', whiteSpace: 'pre-line' }}>
-              {bringItems}
+              {bringItemsText}
             </Typography>
           </Box>
         </Box>

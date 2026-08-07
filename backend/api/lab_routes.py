@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import sys
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from database import (
@@ -31,8 +32,9 @@ class LabResultCreate(BaseModel):
 
 def recalculate_milestones(user_id: str = None):
     """Recalculate all milestones from all existing BCR-ABL1 results."""
-    import sqlite3
-    from database import DB_NAME
+    import psycopg2
+    import psycopg2.extras
+    from database import DATABASE_URL
 
     milestones = [
         ("ccyr", 1.0),
@@ -45,7 +47,7 @@ def recalculate_milestones(user_id: str = None):
         results = get_lab_results(test_type="bcr_abl1", user_id=user_id)
         print(f"[milestones] Found {len(results)} decrypted BCR-ABL1 results")
 
-        conn = sqlite3.connect(DB_NAME)
+        conn = psycopg2.connect(DATABASE_URL)
         cursor = conn.cursor()
 
         # Find the latest BCR-ABL1 result (most recent test_date)
@@ -80,20 +82,20 @@ def recalculate_milestones(user_id: str = None):
                     print(f"[milestones] Failed to parse '{latest_result['value']}': {e}")
 
             cursor.execute(
-                "SELECT id FROM milestones WHERE milestone_type = ? AND user_id = ?",
+                "SELECT id FROM milestones WHERE milestone_type = %s AND user_id = %s",
                 (milestone_type, user_id)
             )
             existing = cursor.fetchone()
 
             if existing:
                 cursor.execute(
-                    "UPDATE milestones SET achieved = ?, achieved_date = ?, value_at_achievement = ? WHERE milestone_type = ? AND user_id = ?",
+                    "UPDATE milestones SET achieved = %s, achieved_date = %s, value_at_achievement = %s WHERE milestone_type = %s AND user_id = %s",
                     (1 if achieved else 0, achieved_date, achieved_value, milestone_type, user_id)
                 )
                 print(f"[milestones] Updated {milestone_type}: achieved={achieved}")
             else:
                 cursor.execute(
-                    "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement, user_id) VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement, user_id) VALUES (%s, %s, %s, %s, %s)",
                     (milestone_type, 1 if achieved else 0, achieved_date, achieved_value, user_id)
                 )
                 print(f"[milestones] Inserted {milestone_type}: achieved={achieved}")
@@ -263,20 +265,20 @@ class BulkCreate(BaseModel):
 
 
 @router.post("/upload-csv")
-async def upload_csv(file: UploadFile = File(...)):
+async def upload_csv(file: UploadFile = File(...), _user_id: str = Depends(get_current_user)):
     content = await file.read()
     text = content.decode("utf-8")
     return parse_csv(text)
 
 
 @router.post("/upload-pdf")
-async def upload_pdf(file: UploadFile = File(...)):
+async def upload_pdf(file: UploadFile = File(...), _user_id: str = Depends(get_current_user)):
     content = await file.read()
     return parse_pdf(content)
 
 
 @router.post("/upload-image")
-async def upload_image(file: UploadFile = File(...)):
+async def upload_image(file: UploadFile = File(...), _user_id: str = Depends(get_current_user)):
     content = await file.read()
     return parse_image(content)
 
@@ -326,21 +328,89 @@ async def get_dashboard(user_id: str = Depends(get_current_user)):
     }
 
 
+@router.get("/dashboard/full")
+async def get_dashboard_full(user_id: str = Depends(get_current_user)):
+    """Aggregate all dashboard data in a single response."""
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        futures = {
+            "lab_results": executor.submit(get_lab_results, None, user_id),
+            "treatments": executor.submit(get_treatments, user_id),
+            "checkup_records": executor.submit(get_checkup_records, user_id),
+            "next_checkup_date": executor.submit(get_setting, "next_checkup_date", user_id),
+            "next_checkup_items": executor.submit(get_setting, "next_checkup_bring_items", user_id),
+        }
+        lab_results = futures["lab_results"].result()
+        treatments = futures["treatments"].result()
+        checkup_records = futures["checkup_records"].result()
+        next_checkup_date = futures["next_checkup_date"].result()
+        next_checkup_items = futures["next_checkup_items"].result()
+
+    # Recalculate milestones
+    recalculate_milestones(user_id=user_id)
+    milestones = get_milestones(user_id=user_id)
+
+    # Latest values
+    latest = {}
+    for test_type in ("bcr_abl1", "cbc_wbc", "cbc_platelets", "cbc_hemoglobin", "cbc_rbc"):
+        type_results = [r for r in lab_results if r["test_type"] == test_type]
+        if type_results:
+            latest[test_type] = max(type_results, key=lambda x: x["test_date"])
+
+    # Current treatment
+    current_treatment = None
+    for t in treatments:
+        if t["end_date"] is None:
+            current_treatment = t
+
+    # Warnings
+    warnings = check_trends(lab_results, treatments)
+
+    # Lab results grouped by test type
+    lab_by_type = {}
+    for test_type in ("bcr_abl1", "cbc_platelets", "cbc_hemoglobin", "cbc_wbc", "cbc_rbc"):
+        lab_by_type[test_type] = [
+            {"value": r["value"], "test_date": r["test_date"]}
+            for r in lab_results if r["test_type"] == test_type
+        ]
+    lab_by_type["all"] = [
+        {"id": r["id"], "test_type": r["test_type"], "value": r["value"],
+         "unit": r["unit"], "test_date": r["test_date"], "reference_range": r.get("reference_range"),
+         "notes": r.get("notes")}
+        for r in lab_results
+    ]
+
+    return {
+        "latest_values": latest,
+        "current_treatment": current_treatment,
+        "warnings": warnings,
+        "milestones": milestones,
+        "total_results": len(lab_results),
+        "lab_results": lab_by_type,
+        "treatments": treatments,
+        "checkup_records": checkup_records,
+        "next_checkup": {
+            "date": next_checkup_date,
+            "bring_items": next_checkup_items,
+        },
+    }
+
+
 @router.get("/milestones", response_model=List[dict])
 async def list_milestones(user_id: str = Depends(get_current_user)):
     return get_milestones(user_id=user_id)
 
 
 @router.get("/debug/milestones")
-async def debug_milestones():
-    """Debug: show raw milestone data and BCR-ABL1 results."""
-    import sqlite3
-    from database import DB_NAME
-    conn = sqlite3.connect(DB_NAME)
+async def debug_milestones(user_id: str = Depends(get_current_user)):
+    """Debug: show raw milestone data and BCR-ABL1 results for current user."""
+    import psycopg2
+    import psycopg2.extras
+    from database import DATABASE_URL
+    conn = psycopg2.connect(DATABASE_URL)
     cursor = conn.cursor()
-    cursor.execute("SELECT id, milestone_type, achieved, achieved_date, value_at_achievement FROM milestones")
+    cursor.execute("SELECT id, milestone_type, achieved, achieved_date, value_at_achievement FROM milestones WHERE user_id = %s", (user_id,))
     milestones = cursor.fetchall()
-    cursor.execute("SELECT id, test_type, value, test_date FROM lab_results WHERE test_type = 'bcr_abl1'")
+    cursor.execute("SELECT id, test_type, value, test_date FROM lab_results WHERE test_type = 'bcr_abl1' AND user_id = %s", (user_id,))
     bcr_results = cursor.fetchall()
     conn.close()
     return {
@@ -376,6 +446,15 @@ class CheckupRecordResponse(BaseModel):
     created_at: str
 
 
+class SettingsSave(BaseModel):
+    key: str
+    value: str
+
+
+class ApiKeyValidate(BaseModel):
+    value: str
+
+
 @router.get("/checkup-records", response_model=List[CheckupRecordResponse])
 async def list_checkup_records(user_id: str = Depends(get_current_user)):
     return get_checkup_records(user_id=user_id)
@@ -395,7 +474,11 @@ async def create_checkup_record(data: CheckupRecordCreate, user_id: str = Depend
 
 
 @router.put("/checkup-records/{record_id}")
-async def update_checkup(record_id: int, data: CheckupRecordUpdate):
+async def update_checkup(record_id: int, data: CheckupRecordUpdate, user_id: str = Depends(get_current_user)):
+    user_records = get_checkup_records(user_id=user_id)
+    record_ids = [r["id"] for r in user_records]
+    if record_id not in record_ids:
+        raise HTTPException(status_code=404, detail="Record not found")
     update_checkup_record(
         record_id=record_id,
         checkup_date=data.checkup_date,
@@ -407,7 +490,11 @@ async def update_checkup(record_id: int, data: CheckupRecordUpdate):
 
 
 @router.delete("/checkup-records/{record_id}")
-async def delete_checkup(record_id: int):
+async def delete_checkup(record_id: int, user_id: str = Depends(get_current_user)):
+    user_records = get_checkup_records(user_id=user_id)
+    record_ids = [r["id"] for r in user_records]
+    if record_id not in record_ids:
+        raise HTTPException(status_code=404, detail="Record not found")
     delete_checkup_record(record_id)
     return {"message": "Deleted"}
 
@@ -416,16 +503,62 @@ async def delete_checkup(record_id: int):
 # USER SETTINGS
 # ==========================================
 
+def _mask_key(key: str) -> str:
+    """Mask an API key: show first 6 and last 4 characters."""
+    if len(key) <= 10:
+        return key[:3] + "..." + key[-3:]
+    return key[:6] + "..." + key[-4:]
+
+
+@router.get("/settings/has-key")
+async def has_api_key(user_id: str = Depends(get_current_user)):
+    """Check if user has a Gemini API key configured."""
+    value = get_setting("gemini_api_key", user_id=user_id)
+    return {"has_key": bool(value)}
+
+
 @router.get("/settings/{key}")
 async def get_user_setting(key: str, user_id: str = Depends(get_current_user)):
     value = get_setting(key, user_id=user_id)
+    if key == "gemini_api_key" and value:
+        return {"key": key, "value": _mask_key(value), "has_key": True}
     return {"key": key, "value": value}
 
 
 @router.post("/settings")
-async def save_user_setting(key: str, value: str, user_id: str = Depends(get_current_user)):
-    save_setting(key, value, user_id=user_id)
+async def save_user_setting(data: SettingsSave, user_id: str = Depends(get_current_user)):
+    value = data.value
+    if data.key == "gemini_api_key":
+        from encryption import encrypt_value
+        value = encrypt_value(value)
+    save_setting(data.key, value, user_id=user_id)
     return {"message": "Saved"}
+
+
+@router.delete("/settings/{key}")
+async def delete_user_setting(key: str, user_id: str = Depends(get_current_user)):
+    from database import get_db_connection
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM user_settings WHERE key = %s AND user_id = %s", (key, user_id))
+    conn.commit()
+    conn.close()
+    return {"message": "Deleted"}
+
+
+@router.post("/settings/validate-key")
+async def validate_api_key(data: ApiKeyValidate):
+    """Validate a Gemini API key by making a minimal test call."""
+    try:
+        from google import genai
+        client = genai.Client(api_key=data.value)
+        client.models.generate_content(
+            model="gemma-4-31b-it",
+            contents="hi"
+        )
+        return {"valid": True}
+    except Exception as e:
+        return {"valid": False, "error": str(e)}
 
 
 @router.delete("/reset")

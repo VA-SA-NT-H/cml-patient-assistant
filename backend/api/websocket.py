@@ -6,7 +6,7 @@ import asyncio
 
 # Add backend to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from agent.agent import client, model_name
+from agent.agent import MODEL_NAME
 from agent.tools import lookup_tki_info, lookup_food_interactions, search_medical_guidelines, search_wikipedia
 from database import save_message, get_session_messages
 from google.genai import types
@@ -294,6 +294,21 @@ async def chat_websocket(websocket: WebSocket, user_id: str):
                         parts=[types.Part.from_text(text=user_message)]
                     ))
                 
+                # Get user's API key
+                from database import get_setting
+                from encryption import decrypt_value
+                api_key = get_setting("gemini_api_key", user_id=user_id)
+                if not api_key:
+                    await websocket.send_json({
+                        "type": "error",
+                        "content": "API key required"
+                    })
+                    continue
+                
+                decrypted_key = decrypt_value(api_key)
+                from google import genai
+                client = genai.Client(api_key=decrypted_key)
+                
                 # Process with Gemini
                 config = types.GenerateContentConfig(
                     system_instruction=SYSTEM_INSTRUCTION,
@@ -307,7 +322,7 @@ async def chat_websocket(websocket: WebSocket, user_id: str):
                 # Loop: handle tool calls until model returns text
                 for _ in range(5):  # max 5 tool call rounds
                     response = client.models.generate_content(
-                        model=model_name,
+                        model=MODEL_NAME,
                         contents=contents,
                         config=config
                     )
@@ -351,7 +366,7 @@ async def chat_websocket(websocket: WebSocket, user_id: str):
                 await websocket.send_json({"type": "status", "content": "Generating response..."})
                 
                 response_stream = client.models.generate_content_stream(
-                    model=model_name,
+                    model=MODEL_NAME,
                     contents=contents,
                     config=config
                 )

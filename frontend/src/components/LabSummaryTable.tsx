@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Box, Typography, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -76,24 +76,25 @@ const getOverallStatus = (results: Record<string, { value: string }>): { text: s
 interface Props {
   refreshKey?: number;
   onRefresh?: () => void;
+  data: LabResult[];
 }
 
-export const LabSummaryTable = ({ refreshKey, onRefresh }: Props) => {
-  const [data, setData] = useState<LabResult[]>([]);
+export const LabSummaryTable = ({ refreshKey, onRefresh, data }: Props) => {
   const { mode } = useTheme();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>('');
   const [editResults, setEditResults] = useState<{ id: number | null; test_type: string; value: string; unit: string }[]>([]);
-  const [deleteTarget, setDeleteTarget] = useState<LabResult | null>(null);
-
-  useEffect(() => { fetchData(); }, [refreshKey]);
+  const [deleteDate, setDeleteDate] = useState<string>('');
+  const [deleteResults, setDeleteResults] = useState<Record<string, { id: number }>>({});
+  const [deleting, setDeleting] = useState(false);
 
   const fetchData = async () => {
     try {
       const response = await apiClient.get('/api/lab-results');
       const results = await response.json();
-      setData(results);
+      // Data is refreshed via parent's fetchDashboard
+      onRefresh?.();
     } catch (error) {
       console.error('Failed to fetch lab results:', error);
     }
@@ -151,28 +152,32 @@ export const LabSummaryTable = ({ refreshKey, onRefresh }: Props) => {
       setEditOpen(false);
       setSelectedDate('');
       setEditResults([]);
-      fetchData();
       onRefresh?.();
     } catch (err) {
       console.error('Failed to update:', err);
     }
   };
 
-  const handleDelete = (r: LabResult) => {
-    setDeleteTarget(r);
+  const handleDeleteDate = (date: string, results: Record<string, { id: number }>) => {
+    setDeleteDate(date);
+    setDeleteResults(results);
     setDeleteOpen(true);
   };
 
   const handleConfirmDelete = async () => {
-    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await apiClient.delete(`/api/lab-results/${deleteTarget.id}`);
+      for (const r of Object.values(deleteResults)) {
+        await apiClient.delete(`/api/lab-results/${r.id}`);
+      }
       setDeleteOpen(false);
-      setDeleteTarget(null);
-      fetchData();
+      setDeleteDate('');
+      setDeleteResults({});
       onRefresh?.();
     } catch (err) {
       console.error('Failed to delete:', err);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -306,17 +311,11 @@ export const LabSummaryTable = ({ refreshKey, onRefresh }: Props) => {
                         <EditIcon fontSize="small" />
                       </IconButton>
                     </Tooltip>
-                    {Object.values(results).length === 1 && (
-                      <Tooltip title="Delete">
-                        <IconButton size="small" onClick={() => {
-                          const r = Object.values(results)[0];
-                          const full = data.find(d => d.id === r.id);
-                          if (full) handleDelete(full);
-                        }}>
-                          <DeleteOutlineIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    )}
+                    <Tooltip title="Delete all">
+                      <IconButton size="small" onClick={() => handleDeleteDate(date, results)} sx={{ color: 'text.secondary' }}>
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    </Tooltip>
                   </Box>
                 </Box>
               );
@@ -381,16 +380,18 @@ export const LabSummaryTable = ({ refreshKey, onRefresh }: Props) => {
       </Dialog>
 
       {/* Delete Dialog */}
-      <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)}>
-        <DialogTitle>Delete result</DialogTitle>
+      <Dialog open={deleteOpen} onClose={() => !deleting && setDeleteOpen(false)}>
+        <DialogTitle>Delete results</DialogTitle>
         <DialogContent>
           <Typography>
-            Delete {deleteTarget?.test_type.replace(/_/g, ' ')} result from {formatDate(deleteTarget?.test_date || '')}?
+            Delete all {Object.keys(deleteResults).length} result{Object.keys(deleteResults).length !== 1 ? 's' : ''} from {formatDate(deleteDate)}?
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDeleteOpen(false)}>Cancel</Button>
-          <Button onClick={handleConfirmDelete} color="error" variant="contained">Delete</Button>
+          <Button onClick={() => setDeleteOpen(false)} disabled={deleting}>Cancel</Button>
+          <Button onClick={handleConfirmDelete} color="error" variant="contained" disabled={deleting}>
+            {deleting ? 'Deleting...' : 'Delete'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

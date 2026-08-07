@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Box, Typography, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -39,8 +39,8 @@ const serializeMedications = (meds: MedicationEntry[]): string | undefined => {
   return JSON.stringify(valid);
 };
 
-export const CheckupRecords = () => {
-  const [records, setRecords] = useState<CheckupRecord[]>([]);
+export const CheckupRecords = ({ data }: { data: CheckupRecord[] }) => {
+  const [records, setRecords] = useState<CheckupRecord[]>(data);
   const { mode } = useTheme();
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -52,13 +52,11 @@ export const CheckupRecords = () => {
   const [formAdvice, setFormAdvice] = useState('');
   const [formMeds, setFormMeds] = useState<MedicationEntry[]>([{ name: '', cost: '' }]);
 
-  useEffect(() => { fetchRecords(); }, []);
-
   const fetchRecords = async () => {
     try {
       const response = await apiClient.get('/api/checkup-records');
-      const data = await response.json();
-      setRecords(data);
+      const result = await response.json();
+      setRecords(result);
     } catch (error) {
       console.error('Failed to fetch checkup records:', error);
     }
@@ -178,7 +176,7 @@ export const CheckupRecords = () => {
             label="Cost"
             value={med.cost}
             onChange={(e) => updateMedication(index, 'cost', e.target.value)}
-            placeholder="e.g. $500"
+            placeholder="e.g. 500"
             size="small"
             sx={{ flex: 1 }}
           />
