@@ -59,6 +59,30 @@ class ApiClient {
     return this.request(path, { method: 'DELETE' });
   }
 
+  async hasKey(): Promise<boolean> {
+    const response = await this.get('/api/settings/has-key');
+    const data = await response.json();
+    return data.has_key;
+  }
+
+  async validateKey(value: string): Promise<{ valid: boolean; error?: string }> {
+    const response = await this.post('/api/settings/validate-key', { value });
+    return response.json();
+  }
+
+  async saveSetting(key: string, value: string) {
+    return this.post('/api/settings', { key, value });
+  }
+
+  async deleteSetting(key: string) {
+    return this.delete(`/api/settings/${key}`);
+  }
+
+  async getSetting(key: string) {
+    const response = await this.get(`/api/settings/${key}`);
+    return response.json();
+  }
+
   getWsUrl() {
     const wsBase = API_BASE.replace('http', 'ws');
     return `${wsBase}/ws/chat?token=${this.token}`;

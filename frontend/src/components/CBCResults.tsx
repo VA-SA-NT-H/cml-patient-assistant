@@ -1,11 +1,9 @@
-import { useState, useEffect } from 'react';
 import { Box, Typography, Chip } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ErrorIcon from '@mui/icons-material/Error';
-import { BarChart } from '@mui/x-charts/BarChart';
+import { LineChart } from '@mui/x-charts/LineChart';
 import { useTheme } from '../theme/ThemeProvider';
-import { apiClient } from '../api';
 import { formatDate } from '../utils/formatDate';
 
 interface LabResult {
@@ -26,6 +24,7 @@ interface Props {
   title: string;
   unit: string;
   zoneConfig?: ZoneConfig;
+  data: LabResult[];
 }
 
 const ZONE_CONFIGS: Record<string, ZoneConfig> = {
@@ -92,24 +91,9 @@ const getMarkerPosition = (value: number, config: ZoneConfig): number => {
   return Math.max(0, Math.min(100, ((value - rangeMin) / (rangeMax - rangeMin)) * 100));
 };
 
-export const CBCResults = ({ testType, title, unit }: Props) => {
-  const [data, setData] = useState<LabResult[]>([]);
+export const CBCResults = ({ testType, title, unit, data }: Props) => {
   const { mode } = useTheme();
   const config = ZONE_CONFIGS[testType];
-
-  useEffect(() => {
-    fetchData();
-  }, [testType]);
-
-  const fetchData = async () => {
-    try {
-      const response = await apiClient.get(`/api/lab-results?test_type=${testType}`);
-      const results = await response.json();
-      setData(results);
-    } catch (error) {
-      console.error('Failed to fetch CBC data:', error);
-    }
-  };
 
   if (!config || data.length === 0) {
     return (
@@ -160,13 +144,6 @@ export const CBCResults = ({ testType, title, unit }: Props) => {
   }));
   const xLabels = chartData.map(d => formatDate(d.date));
   const yValues = chartData.map(d => d.value);
-
-  // Build per-point colored series (one series per zone color)
-  const coloredSeries = config.zones.map(zone => ({
-    label: zone.label,
-    color: zone.color,
-    data: yValues.map(v => (v >= zone.min && v < zone.max) ? v : null),
-  })).filter(s => s.data.some(v => v !== null));
 
   return (
     <Box>
@@ -270,17 +247,17 @@ export const CBCResults = ({ testType, title, unit }: Props) => {
         </Box>
       </Box>
 
-      {/* ── Bar Chart ── */}
+      {/* ── Line Chart ── */}
       {data.length >= 2 && (
         <Box sx={{ mt: 2 }}>
           <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, display: 'block', mb: 1 }}>
             {title} trend
           </Typography>
           <Box sx={{ width: '100%', height: 220 }}>
-            <BarChart
+            <LineChart
               xAxis={[{
                 data: xLabels,
-                scaleType: 'band',
+                scaleType: 'point',
                 tickLabelStyle: {
                   fontSize: 10,
                   fill: mode === 'dark' ? '#aaa' : '#666',
@@ -293,15 +270,16 @@ export const CBCResults = ({ testType, title, unit }: Props) => {
                   fill: mode === 'dark' ? '#aaa' : '#666',
                 },
               }]}
-              series={coloredSeries.map(s => ({
-                data: s.data,
-                color: s.color,
-              }))}
+              series={[{
+                data: yValues,
+                color: mode === 'dark' ? '#555' : '#bbb',
+                colorGetter: ({ value }) => value != null ? getZoneForValue(value, config).color : '#888',
+                showMark: true,
+              }]}
               height={220}
               margin={{ top: 20, bottom: 30, left: 50, right: 20 }}
             />
           </Box>
-          {/* Normal range reference lines */}
           <Box sx={{ display: 'flex', gap: 2, mt: 0.5, justifyContent: 'center' }}>
             <Typography variant="caption" sx={{ fontSize: '0.6rem', color: '#2A9D8F' }}>
               Normal: {config.normalMin}–{config.normalMax} {unit}

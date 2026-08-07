@@ -1,13 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Box, Typography, CircularProgress, Chip } from '@mui/material';
+import { Box, Typography, CircularProgress, Chip, IconButton, Tooltip } from '@mui/material';
 import LocalHospitalIcon from '@mui/icons-material/LocalHospital';
 import ScienceIcon from '@mui/icons-material/Science';
 import FavoriteIcon from '@mui/icons-material/Favorite';
+import MenuIcon from '@mui/icons-material/Menu';
 import { Sidebar } from './components/Sidebar';
 import { ChatMessage } from './components/ChatMessage';
 import { ChatInput } from './components/ChatInput';
 import { Dashboard } from './pages/Dashboard';
+import { Settings } from './pages/Settings';
+import { ApiKeySetup } from './components/ApiKeySetup';
 import { useAuth } from './context/AuthContext';
 import { apiClient } from './api';
 
@@ -45,6 +48,7 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const isDashboard = location.pathname === '/dashboard';
+  const isSettings = location.pathname === '/settings';
   const { token } = useAuth();
 
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -52,11 +56,26 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [dashboardRefreshKey] = useState(0);
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     apiClient.setToken(token);
   }, [token]);
+
+  useEffect(() => {
+    checkApiKey();
+  }, []);
+
+  const checkApiKey = async () => {
+    try {
+      const has = await apiClient.hasKey();
+      setHasApiKey(has);
+    } catch {
+      setHasApiKey(false);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -173,7 +192,10 @@ function App() {
           setIsLoading(false);
           ws.close();
         } else if (data.type === 'error') {
-          console.error('WebSocket error:', data.message);
+          if (data.content === 'API key required') {
+            setHasApiKey(false);
+          }
+          console.error('WebSocket error:', data.message || data.content);
           setIsLoading(false);
           ws.close();
         }
@@ -199,16 +221,51 @@ function App() {
         onDeleteSession={handleDeleteSession}
         onRenameSession={handleRenameSession}
         onNavigateDashboard={() => navigate('/dashboard')}
+        onNavigateSettings={() => navigate('/settings')}
         isDashboard={isDashboard}
+        isSettings={isSettings}
+        open={sidebarOpen}
+        onToggle={() => setSidebarOpen(prev => !prev)}
       />
+
+      {/* Expand sidebar button - sits in layout flow, not overlapping */}
+      {!sidebarOpen && (
+        <Tooltip title="Open sidebar" placement="right">
+          <IconButton
+            onClick={() => setSidebarOpen(true)}
+            sx={{
+              mt: 1.5,
+              ml: 1,
+              alignSelf: 'flex-start',
+              bgcolor: 'background.paper',
+              border: '1px solid',
+              borderColor: 'divider',
+              '&:hover': { bgcolor: 'action.hover' },
+            }}
+            aria-label="Open menu"
+          >
+            <MenuIcon sx={{ fontSize: 20 }} />
+          </IconButton>
+        </Tooltip>
+      )}
 
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         {isDashboard ? (
           <Dashboard refreshKey={dashboardRefreshKey} />
+        ) : isSettings ? (
+          <Settings />
         ) : (
           <>
-            <Box sx={{ flex: 1, overflow: 'auto', py: 2 }}>
-              {messages.length === 0 ? (
+            {hasApiKey === false ? (
+              <ApiKeySetup onComplete={() => setHasApiKey(true)} />
+            ) : hasApiKey === null ? (
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : (
+              <>
+                <Box sx={{ flex: 1, overflow: 'auto', py: 2 }}>
+                  {messages.length === 0 ? (
                 <Box
                   sx={{
                     display: 'flex',
@@ -381,6 +438,8 @@ function App() {
             </Box>
 
             <ChatInput onSendMessage={handleSendMessage} disabled={isLoading} />
+              </>
+            )}
           </>
         )}
       </Box>

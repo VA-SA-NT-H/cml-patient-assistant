@@ -21,11 +21,8 @@ logger = logging.getLogger(__name__)
 # Try loading from the current working directory, and also from the script's folder
 load_dotenv()
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
-# The client automatically looks for GEMINI_API_KEY in the environment
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-model_name = os.getenv("GEMINI_MODEL")
-if not model_name:
-    raise ValueError("GEMINI_MODEL environment variable is missing. Please set it in your .env file.")
+
+MODEL_NAME = "gemma-4-31b-it"
 
 @retry(
     retry=retry_if_exception_type(ServerError),
@@ -44,6 +41,8 @@ def generate_content_with_retry(client, model, contents):
 # 2. THE INTERACTIVE AGENT LOOP (With Memory)
 # ==========================================
 def chat_with_agent():
+    """Standalone CLI chat agent with tool-calling loop."""
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
     print("Welcome to the CML Assistant. Type 'exit' to quit.\n")
     
     system_prompt = """
@@ -82,7 +81,7 @@ def chat_with_agent():
             
             response = generate_content_with_retry(
                 client=client,
-                model=model_name, 
+                model=MODEL_NAME, 
                 contents=conversation_history # Pass the ENTIRE memory every time
             )
 

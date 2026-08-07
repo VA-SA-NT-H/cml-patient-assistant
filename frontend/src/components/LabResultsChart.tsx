@@ -1,11 +1,9 @@
-import { useState, useEffect } from 'react';
 import { Box, Typography, Chip } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import ErrorIcon from '@mui/icons-material/Error';
-import { BarChart } from '@mui/x-charts/BarChart';
+import { LineChart } from '@mui/x-charts/LineChart';
 import { useTheme } from '../theme/ThemeProvider';
-import { apiClient } from '../api';
 import { formatDate } from '../utils/formatDate';
 
 interface LabResult {
@@ -15,6 +13,7 @@ interface LabResult {
 
 interface Props {
   testType: string;
+  data: LabResult[];
 }
 
 interface ZoneInfo {
@@ -88,23 +87,8 @@ const getMarkerPosition = (value: number): number => {
   return Math.max(0, Math.min(100, ((logVal - logMin) / (logMax - logMin)) * 100));
 };
 
-export const LabResultsChart = ({ testType }: Props) => {
-  const [data, setData] = useState<LabResult[]>([]);
+export const LabResultsChart = ({ data }: Props) => {
   const { mode } = useTheme();
-
-  useEffect(() => {
-    fetchData();
-  }, [testType]);
-
-  const fetchData = async () => {
-    try {
-      const response = await apiClient.get(`/api/lab-results?test_type=${testType}`);
-      const results = await response.json();
-      setData(results);
-    } catch (error) {
-      console.error('Failed to fetch lab results:', error);
-    }
-  };
 
   if (data.length === 0) {
     return (
@@ -145,20 +129,6 @@ export const LabResultsChart = ({ testType }: Props) => {
   // Prepare chart data
   const xLabels = data.map(d => formatDate(d.test_date));
   const yValues = data.map(d => parseFloat(d.value));
-
-  // Per-point colored series based on BCR-ABL zones
-  const bcrZones = [
-    { min: 0, max: 0.0032, color: '#16a34a' },
-    { min: 0.0032, max: 0.01, color: '#22c55e' },
-    { min: 0.01, max: 0.1, color: '#2A9D8F' },
-    { min: 0.1, max: 1, color: '#E9A23B' },
-    { min: 1, max: Infinity, color: '#D32F2F' },
-  ];
-
-  const coloredSeries = bcrZones.map(z => ({
-    color: z.color,
-    data: yValues.map(v => (v >= z.min && v < z.max) ? v : null),
-  })).filter(s => s.data.some(v => v !== null));
 
   return (
     <Box>
@@ -277,17 +247,17 @@ export const LabResultsChart = ({ testType }: Props) => {
         </Box>
       </Box>
 
-      {/* ── Bar Chart ── */}
+      {/* ── Line Chart ── */}
       {data.length >= 2 && (
         <Box sx={{ mt: 2 }}>
           <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500, display: 'block', mb: 1 }}>
             BCR-ABL1 trend
           </Typography>
           <Box sx={{ width: '100%', height: 220 }}>
-            <BarChart
+            <LineChart
               xAxis={[{
                 data: xLabels,
-                scaleType: 'band',
+                scaleType: 'point',
                 tickLabelStyle: {
                   fontSize: 10,
                   fill: mode === 'dark' ? '#aaa' : '#666',
@@ -300,10 +270,12 @@ export const LabResultsChart = ({ testType }: Props) => {
                   fill: mode === 'dark' ? '#aaa' : '#666',
                 },
               }]}
-              series={coloredSeries.map(s => ({
-                data: s.data,
-                color: s.color,
-              }))}
+              series={[{
+                data: yValues,
+                color: mode === 'dark' ? '#555' : '#bbb',
+                colorGetter: ({ value }) => value != null ? getZone(value).color : '#888',
+                showMark: true,
+              }]}
               height={220}
               margin={{ top: 20, bottom: 30, left: 50, right: 20 }}
             />

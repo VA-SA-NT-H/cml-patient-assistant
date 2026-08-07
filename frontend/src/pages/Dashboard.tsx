@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Box, Typography, Card, CardContent, Chip, Button, CircularProgress, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
+import { Box, Typography, Card, CardContent, Chip, Button, CircularProgress, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -29,6 +29,17 @@ interface DashboardData {
   warnings: { severity: string; condition: string; message: string }[];
   milestones: { milestone_type: string; achieved: boolean; achieved_date: string | null }[];
   total_results: number;
+  lab_results: {
+    bcr_abl1: { value: string; test_date: string }[];
+    cbc_platelets: { value: string; test_date: string }[];
+    cbc_hemoglobin: { value: string; test_date: string }[];
+    cbc_wbc: { value: string; test_date: string }[];
+    cbc_rbc: { value: string; test_date: string }[];
+    all: { id: number; test_type: string; value: string; unit: string; test_date: string; reference_range?: string; notes?: string }[];
+  };
+  treatments: { id: number; drug_name: string; dosage_mg: number; start_date: string; end_date: string | null; reason_for_change: string | null }[];
+  checkup_records: { id: number; checkup_date: string; doctor_advice: string | null; medications_bought: string | null; medication_cost: string | null; created_at: string }[];
+  next_checkup: { date: string | null; bring_items: string | null };
 }
 
 interface DashboardProps {
@@ -42,13 +53,15 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
   const [treatmentOpen, setTreatmentOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState('');
   const [resetting, setResetting] = useState(false);
   const { mode } = useTheme();
 
   const fetchDashboard = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/api/dashboard');
+      const response = await apiClient.get('/api/dashboard/full');
       const result = await response.json();
       setData(result);
     } catch (error) {
@@ -66,6 +79,8 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
     try {
       setResetting(true);
       await apiClient.delete('/api/reset');
+      setConfirmDialogOpen(false);
+      setConfirmText('');
       setResetDialogOpen(false);
       await fetchDashboard();
     } catch (error) {
@@ -204,7 +219,7 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
 
       {/* ── Next Checkup ── */}
       <Box sx={{ mb: 3 }}>
-        <NextCheckup />
+        <NextCheckup date={data.next_checkup.date} bringItems={data.next_checkup.bring_items} />
       </Box>
 
       {/* ── Thesis: BCR-ABL1 ── */}
@@ -294,7 +309,7 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
         BCR-ABL1 trend
       </Typography>
       <Box sx={{ mb: 4 }}>
-        <LabResultsChart testType="bcr_abl1" />
+        <LabResultsChart testType="bcr_abl1" data={data.lab_results.bcr_abl1} />
       </Box>
 
       {/* ── Blood Counts ── */}
@@ -311,36 +326,36 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
       <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2 }}>
         <Card elevation={0}>
           <CardContent sx={{ p: 2.5 }}>
-            <CBCResults testType="cbc_platelets" title="Platelets" unit="K/µL" />
+            <CBCResults testType="cbc_platelets" title="Platelets" unit="K/µL" data={data.lab_results.cbc_platelets} />
           </CardContent>
         </Card>
         <Card elevation={0}>
           <CardContent sx={{ p: 2.5 }}>
-            <CBCResults testType="cbc_hemoglobin" title="Hemoglobin" unit="g/dL" />
+            <CBCResults testType="cbc_hemoglobin" title="Hemoglobin" unit="g/dL" data={data.lab_results.cbc_hemoglobin} />
           </CardContent>
         </Card>
       </Box>
       <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 4 }}>
         <Card elevation={0}>
           <CardContent sx={{ p: 2.5 }}>
-            <CBCResults testType="cbc_wbc" title="White Blood Cells" unit="K/µL" />
+            <CBCResults testType="cbc_wbc" title="White Blood Cells" unit="K/µL" data={data.lab_results.cbc_wbc} />
           </CardContent>
         </Card>
         <Card elevation={0}>
           <CardContent sx={{ p: 2.5 }}>
-            <CBCResults testType="cbc_rbc" title="Red Blood Cells" unit="M/µL" />
+            <CBCResults testType="cbc_rbc" title="Red Blood Cells" unit="M/µL" data={data.lab_results.cbc_rbc} />
           </CardContent>
         </Card>
       </Box>
 
       {/* ── Lab Summary Table ── */}
       <Box sx={{ mb: 4 }}>
-        <LabSummaryTable refreshKey={refreshKey} onRefresh={fetchDashboard} />
+        <LabSummaryTable refreshKey={refreshKey} onRefresh={fetchDashboard} data={data.lab_results.all} />
       </Box>
 
       {/* ── Checkup Records ── */}
       <Box sx={{ mb: 4 }}>
-        <CheckupRecords />
+        <CheckupRecords data={data.checkup_records} />
       </Box>
 
       {/* ── Treatment History ── */}
@@ -355,7 +370,7 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
         Treatment history
       </Typography>
       <Box sx={{ mb: 4 }}>
-        <TreatmentTimeline />
+        <TreatmentTimeline data={data.treatments} />
       </Box>
 
       {/* ── Achievements ── */}
@@ -387,7 +402,7 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
         </Typography>
       </Box>
 
-      {/* ── Reset Dialog ── */}
+      {/* ── Reset Dialog (Step 1) ── */}
       <Dialog
         open={resetDialogOpen}
         onClose={() => setResetDialogOpen(false)}
@@ -407,10 +422,64 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
             Cancel
           </Button>
           <Button
+            onClick={() => {
+              setResetDialogOpen(false);
+              setConfirmDialogOpen(true);
+            }}
+            color="error"
+            variant="contained"
+          >
+            Continue
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Confirm Dialog (Step 2 - type to confirm) ── */}
+      <Dialog
+        open={confirmDialogOpen}
+        onClose={() => {
+          setConfirmDialogOpen(false);
+          setConfirmText('');
+        }}
+        PaperProps={{ sx: { borderRadius: 3, minWidth: 400 } }}
+      >
+        <DialogTitle sx={{ fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600 }}>
+          Type DELETE to confirm
+        </DialogTitle>
+        <DialogContent>
+          <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
+            This action is permanent and cannot be undone. All lab results, treatments,
+            and milestone data will be erased.
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            placeholder="Type DELETE"
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && confirmText === 'DELETE') handleReset();
+            }}
+            error={confirmText.length > 0 && confirmText !== 'DELETE'}
+            helperText={confirmText.length > 0 && confirmText !== 'DELETE' ? 'Type exactly "DELETE"' : ''}
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button
+            onClick={() => {
+              setConfirmDialogOpen(false);
+              setConfirmText('');
+            }}
+            color="inherit"
+          >
+            Cancel
+          </Button>
+          <Button
             onClick={handleReset}
             color="error"
             variant="contained"
-            disabled={resetting}
+            disabled={confirmText !== 'DELETE' || resetting}
             startIcon={resetting ? <CircularProgress size={16} /> : <DeleteOutlineIcon />}
           >
             {resetting ? 'Deleting...' : 'Delete everything'}

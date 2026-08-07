@@ -28,8 +28,9 @@ import ChatIcon from '@mui/icons-material/Chat';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import MedicalServicesIcon from '@mui/icons-material/MedicalServices';
-import LogoutIcon from '@mui/icons-material/Logout';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { ThemeToggle } from './ThemeToggle';
 import { useAuth } from '../context/AuthContext';
 
@@ -47,7 +48,11 @@ interface SidebarProps {
   onDeleteSession: (sessionId: string) => void;
   onRenameSession: (sessionId: string, newTitle: string) => void;
   onNavigateDashboard: () => void;
+  onNavigateSettings: () => void;
   isDashboard: boolean;
+  isSettings: boolean;
+  open: boolean;
+  onToggle: () => void;
 }
 
 const DRAWER_WIDTH = 264;
@@ -60,14 +65,17 @@ export const Sidebar = ({
   onDeleteSession,
   onRenameSession,
   onNavigateDashboard,
+  onNavigateSettings,
   isDashboard,
+  isSettings,
+  open,
+  onToggle,
 }: SidebarProps) => {
   const [editingSession, setEditingSession] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [deletingSession, setDeletingSession] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [desktopOpen, setDesktopOpen] = useState(true);
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   const muiTheme = useTheme();
   const isMobile = useMediaQuery(muiTheme.breakpoints.down('md'));
@@ -82,14 +90,14 @@ export const Sidebar = ({
     if (isMobile) setMobileOpen(false);
   };
 
-  const handleNewChat = () => {
-    onNewChat();
+  const handleNavigateSettings = () => {
+    onNavigateSettings();
     if (isMobile) setMobileOpen(false);
   };
 
-  const handleCloseSidebar = () => {
+  const handleNewChat = () => {
+    onNewChat();
     if (isMobile) setMobileOpen(false);
-    else setDesktopOpen(false);
   };
 
   const handleRename = (session: Session) => {
@@ -175,8 +183,8 @@ export const Sidebar = ({
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
           <ThemeToggle />
           {!isMobile && (
-            <Tooltip title="Close sidebar">
-              <IconButton onClick={handleCloseSidebar} size="small" sx={{ ml: 0.5 }}>
+            <Tooltip title="Collapse sidebar">
+              <IconButton onClick={onToggle} size="small" sx={{ ml: 0.5 }}>
                 <ChevronLeftIcon sx={{ fontSize: 18 }} />
               </IconButton>
             </Tooltip>
@@ -392,13 +400,36 @@ export const Sidebar = ({
                 {user.email}
               </Typography>
             </Box>
-            <Tooltip title="Sign out">
-              <IconButton onClick={logout} size="small" color="error">
-                <LogoutIcon sx={{ fontSize: 18 }} />
-              </IconButton>
-            </Tooltip>
           </Box>
         )}
+        <Box sx={{ display: 'flex', gap: 1, mb: 1.5 }}>
+          <Button
+            fullWidth
+            size="small"
+            variant={isSettings ? 'contained' : 'outlined'}
+            startIcon={<SettingsIcon sx={{ fontSize: 16 }} />}
+            onClick={handleNavigateSettings}
+            sx={{
+              justifyContent: 'flex-start',
+              px: 1.5,
+              py: 0.75,
+              fontSize: '0.78rem',
+              fontWeight: isSettings ? 600 : 400,
+              borderRadius: 1.5,
+              textTransform: 'none',
+              ...(isSettings ? {
+                background: (theme) =>
+                  theme.palette.mode === 'dark'
+                    ? 'rgba(42, 157, 143, 0.15)'
+                    : 'rgba(42, 157, 143, 0.08)',
+                borderColor: 'secondary.main',
+                color: 'secondary.main',
+              } : {}),
+            }}
+          >
+            Settings
+          </Button>
+        </Box>
         <Typography
           variant="caption"
           sx={{
@@ -416,49 +447,100 @@ export const Sidebar = ({
     </>
   );
 
+  const sidebarBg = (theme: any) =>
+    theme.palette.mode === 'dark'
+      ? 'linear-gradient(180deg, #0A0A0A 0%, #000000 100%)'
+      : 'linear-gradient(180deg, #FAFAFA 0%, #F0F0F0 100%)';
+
   return (
     <>
-      {/* Hamburger button - always visible when sidebar is closed */}
-      {((isMobile && !mobileOpen) || (!isMobile && !desktopOpen)) && (
-        <IconButton
-          onClick={() => isMobile ? setMobileOpen(true) : setDesktopOpen(true)}
+      {/* Desktop: persistent inline sidebar */}
+      {!isMobile && open && (
+        <Box
           sx={{
-            position: 'fixed',
-            top: 12,
-            left: 12,
-            zIndex: 1300,
-            bgcolor: 'background.paper',
-            border: '1px solid',
-            borderColor: 'divider',
-            '&:hover': { bgcolor: 'action.hover' },
-          }}
-          aria-label="Open menu"
-        >
-          <MenuIcon sx={{ fontSize: 20 }} />
-        </IconButton>
-      )}
-
-      {/* Single Drawer for both mobile and desktop */}
-      <Drawer
-        variant="temporary"
-        open={isMobile ? mobileOpen : desktopOpen}
-        onClose={() => isMobile ? setMobileOpen(false) : setDesktopOpen(false)}
-        ModalProps={{ keepMounted: true }}
-        sx={{
-          '& .MuiDrawer-paper': {
             width: DRAWER_WIDTH,
-            boxSizing: 'border-box',
+            flexShrink: 0,
+            height: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
             borderRight: '1px solid',
             borderColor: 'divider',
-            background: (theme) =>
-              theme.palette.mode === 'dark'
-                ? 'linear-gradient(180deg, #0A0A0A 0%, #000000 100%)'
-                : 'linear-gradient(180deg, #FAFAFA 0%, #F0F0F0 100%)',
-          },
-        }}
-      >
-        {drawerContent}
-      </Drawer>
+            bgcolor: sidebarBg,
+            position: 'relative',
+          }}
+        >
+          {drawerContent}
+          {/* Chevron collapse button at right edge */}
+          <Box
+            sx={{
+              position: 'absolute',
+              top: '50%',
+              right: -14,
+              transform: 'translateY(-50%)',
+              zIndex: 10,
+            }}
+          >
+            <Tooltip title="Collapse sidebar" placement="right">
+              <IconButton
+                onClick={onToggle}
+                size="small"
+                sx={{
+                  width: 28,
+                  height: 28,
+                  bgcolor: 'background.paper',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: '50%',
+                  '&:hover': { bgcolor: 'action.hover' },
+                }}
+              >
+                <ChevronLeftIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        </Box>
+      )}
+
+      {/* Mobile: overlay Drawer */}
+      {isMobile && (
+        <>
+          {!mobileOpen && (
+            <IconButton
+              onClick={() => setMobileOpen(true)}
+              sx={{
+                position: 'fixed',
+                top: 12,
+                left: 12,
+                zIndex: 1300,
+                bgcolor: 'background.paper',
+                border: '1px solid',
+                borderColor: 'divider',
+                '&:hover': { bgcolor: 'action.hover' },
+              }}
+              aria-label="Open menu"
+            >
+              <MenuIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          )}
+          <Drawer
+            variant="temporary"
+            open={mobileOpen}
+            onClose={() => setMobileOpen(false)}
+            ModalProps={{ keepMounted: true }}
+            sx={{
+              '& .MuiDrawer-paper': {
+                width: DRAWER_WIDTH,
+                boxSizing: 'border-box',
+                borderRight: '1px solid',
+                borderColor: 'divider',
+                bgcolor: sidebarBg,
+              },
+            }}
+          >
+            {drawerContent}
+          </Drawer>
+        </>
+      )}
 
       {/* Rename Dialog */}
       <Dialog

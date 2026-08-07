@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, TextField, IconButton, Paper, Typography } from '@mui/material';
+import { Box, TextField, IconButton, Paper } from '@mui/material';
 import SendIcon from '@mui/icons-material/Send';
 import { useTheme } from '../theme/ThemeProvider';
 
@@ -32,8 +32,8 @@ export const ChatInput = ({ onSendMessage, disabled = false }: ChatInputProps) =
     <Box
       sx={{
         px: 3,
-        pb: 2.5,
-        pt: 1,
+        pb: 1,
+        pt: 0.5,
       }}
     >
       <Paper
@@ -41,7 +41,7 @@ export const ChatInput = ({ onSendMessage, disabled = false }: ChatInputProps) =
         sx={{
           display: 'flex',
           alignItems: 'flex-end',
-          p: 0.75,
+          p: 0.5,
           borderRadius: 3,
           border: '1.5px solid',
           borderColor: 'divider',
@@ -58,7 +58,7 @@ export const ChatInput = ({ onSendMessage, disabled = false }: ChatInputProps) =
         <TextField
           fullWidth
           multiline
-          maxRows={4}
+          maxRows={2}
           placeholder="Ask about CML, medications, side effects..."
           value={message}
           onChange={(e) => setMessage(e.target.value)}
@@ -74,7 +74,7 @@ export const ChatInput = ({ onSendMessage, disabled = false }: ChatInputProps) =
           sx={{
             '& .MuiInputBase-root': {
               p: 1,
-              fontSize: '0.9rem',
+              fontSize: '0.85rem',
             },
             '& .MuiInputBase-input::placeholder': {
               opacity: 0.45,
@@ -88,8 +88,8 @@ export const ChatInput = ({ onSendMessage, disabled = false }: ChatInputProps) =
           aria-label="Send message"
           sx={{
             ml: 0.5,
-            width: 40,
-            height: 40,
+            width: 36,
+            height: 36,
             borderRadius: 2,
             background: hasContent
               ? 'linear-gradient(135deg, #E8573A 0%, #C4432B 100%)'
@@ -108,22 +108,9 @@ export const ChatInput = ({ onSendMessage, disabled = false }: ChatInputProps) =
             },
           }}
         >
-          <SendIcon sx={{ fontSize: 18 }} />
+          <SendIcon sx={{ fontSize: 16 }} />
         </IconButton>
       </Paper>
-      <Typography
-        variant="caption"
-        sx={{
-          display: 'block',
-          textAlign: 'center',
-          mt: 0.75,
-          color: 'text.secondary',
-          opacity: 0.5,
-          fontSize: '0.65rem',
-        }}
-      >
-        Enter to send · Shift+Enter for new line
-      </Typography>
     </Box>
   );
 };

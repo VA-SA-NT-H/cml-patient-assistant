@@ -45,7 +45,7 @@ app = FastAPI(
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("JWT_SECRET", "dev-secret"))
 
 # CORS for React frontend
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:5173")
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
