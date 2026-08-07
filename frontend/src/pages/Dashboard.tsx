@@ -35,7 +35,7 @@ interface DashboardData {
     cbc_hemoglobin: { value: string; test_date: string }[];
     cbc_wbc: { value: string; test_date: string }[];
     cbc_rbc: { value: string; test_date: string }[];
-    all: { id: number; test_type: string; value: string; unit: string; test_date: string; reference_range?: string; notes?: string }[];
+    all: { id: number; test_type: string; value: string; unit: string; test_date: string; reference_range: string | null; notes: string | null }[];
   };
   treatments: { id: number; drug_name: string; dosage_mg: number; start_date: string; end_date: string | null; reason_for_change: string | null }[];
   checkup_records: { id: number; checkup_date: string; doctor_advice: string | null; medications_bought: string | null; medication_cost: string | null; created_at: string }[];

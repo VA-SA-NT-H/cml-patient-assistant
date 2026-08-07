@@ -79,7 +79,7 @@ interface Props {
   data: LabResult[];
 }
 
-export const LabSummaryTable = ({ refreshKey, onRefresh, data }: Props) => {
+export const LabSummaryTable = ({ onRefresh, data }: Props) => {
   const { mode } = useTheme();
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -88,17 +88,6 @@ export const LabSummaryTable = ({ refreshKey, onRefresh, data }: Props) => {
   const [deleteDate, setDeleteDate] = useState<string>('');
   const [deleteResults, setDeleteResults] = useState<Record<string, { id: number }>>({});
   const [deleting, setDeleting] = useState(false);
-
-  const fetchData = async () => {
-    try {
-      const response = await apiClient.get('/api/lab-results');
-      const results = await response.json();
-      // Data is refreshed via parent's fetchDashboard
-      onRefresh?.();
-    } catch (error) {
-      console.error('Failed to fetch lab results:', error);
-    }
-  };
 
   const handleEdit = (date: string, results: Record<string, { id: number; value: string; unit: string }>) => {
     setSelectedDate(date);
