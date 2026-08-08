@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip, CircularProgress } from '@mui/material';
 import { apiClient } from '../api';
 import { formatDate } from '../utils/formatDate';
 
@@ -23,6 +23,7 @@ export const FileUploadDialog = ({ open, onClose, onSaved }: Props) => {
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
   const [fileName, setFileName] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [committing, setCommitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getUploadEndpoint = (fileName: string): string => {
@@ -61,6 +62,7 @@ export const FileUploadDialog = ({ open, onClose, onSaved }: Props) => {
     const validRows = parsedRows.filter(r => r.valid);
     if (validRows.length === 0) return;
 
+    setCommitting(true);
     try {
       await apiClient.post('/api/lab-results/bulk', { results: validRows });
       setParsedRows([]);
@@ -69,6 +71,8 @@ export const FileUploadDialog = ({ open, onClose, onSaved }: Props) => {
       onClose();
     } catch (error) {
       console.error('Commit failed:', error);
+    } finally {
+      setCommitting(false);
     }
   };
 
@@ -126,11 +130,12 @@ export const FileUploadDialog = ({ open, onClose, onSaved }: Props) => {
           </TableContainer>
         )}
       </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose}>Cancel</Button>
+      <DialogActions sx={{ px: 3, pb: 2.5 }}>
+        <Button onClick={handleClose} disabled={committing}>Cancel</Button>
         <Button onClick={handleCommit} variant="contained"
-          disabled={parsedRows.filter(r => r.valid).length === 0}>
-          Commit {parsedRows.filter(r => r.valid).length} Rows
+          disabled={parsedRows.filter(r => r.valid).length === 0 || committing}>
+          {committing ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+          {committing ? 'Committing...' : `Commit ${parsedRows.filter(r => r.valid).length} Rows`}
         </Button>
       </DialogActions>
     </Dialog>

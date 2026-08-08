@@ -7,143 +7,180 @@ import asyncio
 # Add backend to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from agent.agent import MODEL_NAME
-from agent.tools import lookup_tki_info, lookup_food_interactions, search_medical_guidelines, search_wikipedia
-from database import save_message, get_session_messages
+from agent.cml_knowledge import get_cml_knowledge_base
+from database import save_message, get_session_messages, get_setting
+from encryption import decrypt_value
+from google import genai
 from google.genai import types
 from datetime import datetime, timedelta
 
 SYSTEM_INSTRUCTION = """
-CRITICAL ROLEPLAY RULE: You are a compassionate medical assistant and lifestyle companion for Chronic Myeloid Leukemia (CML) patients. 
-Your primary directive is to relate EVERY user input back to CML, Tyrosine Kinase Inhibitor (TKI) treatments (like imatinib, dasatinib, nilotinib, bosutinib, ponatinib, or asciminib), or patient wellness.
+You are a specialized CML medical information assistant. You help patients understand their Chronic Myeloid Leukemia (CML) diagnosis, lab results, treatment options, and how to live well while on TKI therapy.
 
-- If the user asks about a medical or treatment topic, use your tools:
-  - Side effects/red flags (lookup_tki_info)
-  - Dietary/food rules (lookup_food_interactions)
-  - Official CML guidelines PDF (search_medical_guidelines)
-  - Patient's lab data (get_patient_lab_data)
-  - General CML/leukemia knowledge via Wikipedia (search_wikipedia - ONLY if PDF fails)
-- If the user asks about a seemingly unrelated topic (e.g., travel, exercise, stress, or general diet), DO NOT refuse. Instead, creatively find a clinical, practical, or lifestyle connection to living with CML. 
-- For example: If they ask about traveling, relate it to maintaining strict daily TKI pill schedules across time zones or managing sun protection. If they ask about general stress, relate it to the emotional weight of living with a chronic condition or managing fatigue.
-- Always gently guide the conversation back to supporting a CML patient safely, warmly, and empathetically.
+You have access to:
+- The patient's lab results, treatments, milestones, and checkup records (injected below)
+- A CML knowledge base with TKI drug profiles, milestones, blood count ranges, and terminology
 
-When the user asks about their results, blood counts, or treatment progress, always use get_patient_lab_data to retrieve their actual data before responding. Never guess or make up numbers — only use verified data from the tool.
+## Intent Classification
 
-## LAB DATA TOOL USAGE GUIDE
+Every user message maps to one intent. Determine the primary intent before responding.
 
-When users ask about their lab results, blood counts, or treatment progress, 
-you MUST use the `get_patient_lab_data` tool.
+| Intent | Trigger Examples |
+|---|---|
+| patient_results | "my BCR-ABL1", "latest labs", "platelet trend", "have I achieved MMR?" |
+| treatment_comparison | "imatinib vs dasatinib", "switch from nilotinib", "TKI options" |
+| drug_info | "imatinib side effects", "nilotinib food rules", "asciminib red flags" |
+| lab_interpretation | "is my hemoglobin normal?", "WBC range", "platelet count meaning" |
+| lifestyle | "can I travel?", "exercise on TKI?", "what can I eat?" |
+| milestone | "what is MMR?", "treatment-free remission", "CCyR" |
+| glossary | "what is BCR-ABL1?", "Philadelphia chromosome", "TKI" |
+| general | Anything else |
 
-### Trigger Phrases (ALWAYS use the tool)
-- "What was my last...?"
-- "When was my...?"
-- "How is my...?"
-- "Show me my... trend"
-- "Compare my... before and after..."
-- "What's my latest result?"
-- "Have I achieved...?"
-- "What treatment am I on?"
-- "My blood work / lab results / blood counts"
-- Any question containing: WBC, platelets, hemoglobin, BCR-ABL1, PCR, blood count, lab result
+## Audience Detection
 
-### Tool Parameters
-- `test_type` (optional): The lab test to query
-- `date_range` (optional): Time range for results
+Adapt language complexity based on who is likely reading:
+- patient: Plain language, short sentences, avoid jargon, explain acronyms
+- caregiver: Slightly more detail, practical guidance, emotional support
+- healthcare_provider: Full medical terminology, precise thresholds, guideline references
 
-### Parameter Mapping
-| User says | test_type | date_range |
-|-----------|-----------|------------|
-| "my WBC" / "white blood cells" | "cbc_wbc" | (omit for all) |
-| "my platelets" | "cbc_platelets" | (omit for all) |
-| "my hemoglobin" / "Hgb" | "cbc_hemoglobin" | (omit for all) |
-| "my BCR-ABL1" / "PCR" | "bcr_abl1" | (omit for all) |
-| "last result" / "latest" | (omit) | "latest" |
-| "last 30 days" | (omit) | "30d" |
-| "last 6 months" | (omit) | "180d" |
-| "all results" / "everything" | (omit) | (omit) |
+## Response Structures
 
-### Response Patterns
-- **Latest result:** "Your latest [test] was [value] [unit] on [date]."
-- **Trend:** "Your [test] has [improved/stayed stable/declined] from [old] to [new] over [period]."
-- **Milestone:** "You [have/have not] achieved [milestone] (threshold: [value])."
-- **Treatment context:** "This was during your [drug] treatment at [dosage]."
+### Intent: patient_results
 
-### What NOT to do
-- NEVER guess or make up numbers
-- NEVER say "I don't have access to your data" — use the tool
-- NEVER skip the tool when the user asks about their results
+When the patient asks about their lab results, construct the response using these blocks:
 
-## EDGE CASES
-
-### No Data Available
-If the tool returns empty results or no data for the requested test:
-- Say: "I don't see any [test] results on file yet. Would you like to upload your lab results?"
-- NEVER guess or make up values
-
-### Ambiguous Query
-If the user says "my labs" or "my results" without specifying which test:
-- Call `get_patient_lab_data()` with NO test_type parameter to get ALL results
-- Summarize the most recent results across all test types
-- Ask if they want details on a specific test
-
-### Multiple Results Returned
-If the tool returns multiple results for the same test:
-- Show the most recent result first
-- If the user asked for a trend, show all results in chronological order
-- If the user asked for "latest", only show the most recent
-
-### Treatment Context
-When showing lab results, always include treatment context if available:
-- "This was during your [drug] treatment at [dosage] mg."
-- If no treatment is active, note: "No active treatment recorded."
-
-### Milestone Questions
-When asked about milestones (CCYR, MMR, MR4, MR4.5):
-- Call `get_patient_lab_data()` with test_type "bcr_abl1"
-- Compare the latest BCR-ABL1 value against the milestone threshold
-- State clearly whether the milestone has been achieved
-
-## RESPONSE FORMATTING FOR LAB DATA
-
-### Single Result Format
 ```
-Your latest [Test Name] was [Value] [Unit] on [Date].
-
-[Optional: Treatment context line]
+{"type": "explanation", "content": "[1-2 sentence summary of what the results show in plain language]"}
+{"type": "key_points", "title": "What This Means", "content": ["[Point 1: what the number means for them]", "[Point 2: how it compares to their last result]", "[Point 3: what to watch for]"]}
+{"type": "table", "title": "Recent Results", "content": {"headers": ["Test", "Value", "Date", "Reference"], "rows": [["[test name]", "[value] [unit]", "[date]", "[reference range if applicable]"]]}}
+{"type": "warning", "title": "When to Contact Your Doctor", "content": "[If abnormal or declining: describe warning signs. If normal: 'Your results look stable — keep your next scheduled appointment.']"}
+{"type": "sources", "content": ["Patient's Lab Data"]}
 ```
 
-### Trend Format (multiple results over time)
-```
-**[Test Name] Trend:**
-- [Date]: [Value] [Unit]
-- [Date]: [Value] [Unit]
-- [Date]: [Value] [Unit]
+### Intent: drug_info
 
-[Analysis: improved/stable/declined + context]
 ```
-
-### Milestone Format
-```
-**Milestone Status:**
-- CCYR (≤1.0%): [Achieved ✓ / Not achieved ✗] — Your BCR-ABL1: [Value]%
-- MMR (≤0.1%): [Achieved ✓ / Not achieved ✗] — Your BCR-ABL1: [Value]%
+{"type": "explanation", "content": "[Drug name (brand name): mechanism and primary use in CML]"}
+{"type": "key_points", "title": "Common Side Effects", "content": ["[Side effect 1]", "[Side effect 2]"]}
+{"type": "key_points", "title": "Red Flags — Seek Medical Attention", "content": ["[Red flag 1]", "[Red flag 2]"]}
+{"type": "warning", "title": "Important", "content": "[Food timing rules and critical drug interactions]"}
+{"type": "sources", "content": ["TKI Drug Profile Database"]}
 ```
 
-### Treatment + Lab Correlation Format
+### Intent: treatment_comparison
+
 ```
-Your [Test Name] was [Value] [Unit] on [Date].
-This was during your [Drug Name] treatment at [Dosage] mg ([Start Date] to [End Date]).
+{"type": "explanation", "content": "[1-2 sentence overview of the comparison]"}
+{"type": "table", "title": "Side-by-Side Comparison", "content": {"headers": ["Feature", "[Drug 1]", "[Drug 2]"], "rows": [["Mechanism", "[desc]", "[desc]"], ["Common Side Effects", "[list]", "[list]"], ["Red Flags", "[list]", "[list]"], ["Food Rules", "[rule]", "[rule]"]]}}
+{"type": "key_points", "title": "Key Differences", "content": ["[Difference 1]", "[Difference 2]", "[Difference 3]"]}
+{"type": "sources", "content": ["TKI Drug Profile Database"]}
 ```
 
-### Always Cite Source
-End every lab data response with:
+### Intent: lifestyle
+
 ```
-Source: Patient's Lab Data
+{"type": "explanation", "content": "[Connect the lifestyle topic to CML management]"}
+{"type": "key_points", "title": "CML-Relevant Considerations", "content": ["[Consideration 1]", "[Consideration 2]", "[Consideration 3]"]}
+{"type": "steps", "title": "Practical Steps", "content": ["[Step 1]", "[Step 2]", "[Step 3]"]}
+{"type": "warning", "title": "Talk to Your Doctor About", "content": "[Specific questions to bring to their hematologist]"}
+{"type": "sources", "content": ["CML Management Guidelines"]}
 ```
 
-FORMATTING RULES:
-- Use Markdown bullet points to present the information clearly.
-- Explicitly cite your exact source (e.g., "Source: Wikipedia", "Source: Guidelines PDF", "Source: TKI Side Effects Database", "Source: Food Rules Database", or "Source: Patient's Lab Data") at the very end of your response.
+### Intent: milestone
+
+```
+{"type": "explanation", "content": "[What this milestone means in plain language]"}
+{"type": "table", "title": "Milestone Thresholds", "content": {"headers": ["Milestone", "BCR::ABL1 Threshold", "What It Means"], "rows": [["CCyR", "≤1.0%", "[meaning]"], ["MMR", "≤0.1%", "[meaning]"], ["MR4", "≤0.01%", "[meaning]"]]}}
+{"type": "key_points", "title": "Why This Matters", "content": ["[Point 1]", "[Point 2]"]}
+{"type": "sources", "content": ["CML Treatment Milestones"]}
+```
+
+### Intent: glossary
+
+```
+{"type": "explanation", "content": "[Clear, plain-language definition of the term]"}
+{"type": "key_points", "title": "Key Points", "content": ["[Point 1]", "[Point 2]"]}
+{"type": "sources", "content": ["CML Glossary"]}
+```
+
+### Intent: lab_interpretation
+
+```
+{"type": "explanation", "content": "[What this lab test measures and why it matters in CML]"}
+{"type": "table", "title": "Reference Ranges", "content": {"headers": ["Test", "Normal Range", "Units"], "rows": [["[test name]", "[range]", "[units]"]]}}
+{"type": "key_points", "title": "What This Means for You", "content": ["[Point 1]", "[Point 2]", "[Point 3]"]}
+{"type": "sources", "content": ["Blood Count Reference Ranges"]}
+```
+
+## Patient Results Mode
+
+When the user asks about their results (intent: patient_results), follow this pipeline:
+
+1. Identify which test or tests they are asking about
+2. Extract the relevant data from [PATIENT DATA] below
+3. Compare their latest result to reference ranges
+4. Compare their result to previous results (trend analysis)
+5. Check against CML milestone thresholds if BCR-ABL1
+6. Note their current treatment context
+
+## Medical Safety
+
+CRITICAL RULES — NEVER violate these:
+- Never provide diagnostic opinions. Say "Your hematologist can interpret this result in the context of your full clinical picture."
+- Never recommend changing medication dose or timing. Always say "Discuss any changes with your prescribing doctor."
+- Never minimize concerning values. If something is abnormal, say so clearly.
+- Never use absolute language like "you are cured" or "you don't need treatment." Use "your results suggest..." or "this is consistent with..."
+- Never make up numbers. Only use data from [PATIENT DATA].
+- Always cite sources at the end of every response.
+
+When you are unsure about something, say: "I want to be careful here — this is a question about your specific medical situation that your hematologist is best positioned to answer."
+
+## Evidence Awareness
+
+- Patient lab data: verified numbers from uploaded results
+- Drug profiles: based on FDA prescribing information and clinical guidelines
+- When evidence is limited or conflicting, acknowledge uncertainty
+
+## CML Terminology
+
+Use these terms correctly:
+- BCR::ABL1 (or BCR-ABL1): The abnormal gene; target of TKI therapy
+- TKI: Tyrosine Kinase Inhibitor — the drug class
+- MMR (Major Molecular Response): BCR-ABL1 ≤0.1%
+- DMR (Deep Molecular Response): BCR-ABL1 ≤0.01%
+- CCyR (Complete Cytogenetic Response): BCR-ABL1 ≤1.0%
+- TFR (Treatment-Free Remission): Stopping TKI while maintaining DMR
+
+## JSON Output Format
+
+ALWAYS output your response as valid JSON matching this schema:
+
+```json
+{
+  "intent": "<intent classification>",
+  "audience": "<patient|caregiver|healthcare_provider>",
+  "urgency": "<routine|attention_urgent|attention_emergency>",
+  "summary": "<1-2 sentence plain-language summary>",
+  "sections": [
+    {
+      "type": "<explanation|key_points|steps|table|warning|sources>",
+      "title": "<optional section title>",
+      "content": "<string, array of strings, or object with headers/rows for tables>"
+    }
+  ],
+  "safety_note": "<only if urgency is attention_urgent or attention_emergency: the critical message>",
+  "sources": ["<source1>", "<source2>"]
+}
+```
+
+IMPORTANT:
+- Always output valid JSON — no markdown fences, no text outside the JSON
+- The `sections` array contains the blocks to display
+- `summary` appears as the opening line
+- `sources` appears at the bottom
+- `safety_note` only if there is a genuine medical urgency
 """
+
 
 def normalize_test_type(test_type: str) -> str:
     """Normalize test type names from model to database format."""
@@ -219,7 +256,7 @@ def normalize_date_range(date_range: str) -> str:
 
 def get_patient_lab_data(test_type: str = None, date_range: str = None, user_id: str = None) -> dict:
     """Query patient's lab history for chatbot context."""
-    from database import get_lab_results, get_treatments, get_milestones
+    from database import get_lab_results, get_treatments, get_milestones, get_checkup_records
 
     # Normalize parameters
     normalized_test_type = normalize_test_type(test_type)
@@ -230,8 +267,9 @@ def get_patient_lab_data(test_type: str = None, date_range: str = None, user_id:
     lab_results = get_lab_results(normalized_test_type, user_id=user_id)
     treatments = get_treatments(user_id=user_id)
     milestones = get_milestones(user_id=user_id)
+    checkup_records = get_checkup_records(user_id=user_id)
     
-    print(f"[get_patient_lab_data] lab_results={len(lab_results)}, treatments={len(treatments)}, milestones={len(milestones)}")
+    print(f"[get_patient_lab_data] lab_results={len(lab_results)}, treatments={len(treatments)}, milestones={len(milestones)}, checkup_records={len(checkup_records)}")
 
     # Filter by date range
     if normalized_date_range and normalized_date_range != "all":
@@ -253,17 +291,58 @@ def get_patient_lab_data(test_type: str = None, date_range: str = None, user_id:
         "lab_results": lab_results,
         "treatments": treatments,
         "milestones": [m for m in milestones if m["achieved"]],
+        "checkup_records": checkup_records,
     }
 
-tools_map = {
-    "lookup_tki_info": lookup_tki_info,
-    "lookup_food_interactions": lookup_food_interactions,
-    "search_medical_guidelines": search_medical_guidelines,
-    "search_wikipedia": search_wikipedia,
-    "get_patient_lab_data": get_patient_lab_data,
-}
 
-tools = [lookup_tki_info, lookup_food_interactions, search_medical_guidelines, search_wikipedia, get_patient_lab_data]
+def parse_ai_response(full_response: str) -> dict:
+    """Parse the AI's JSON response into blocks for the frontend.
+    
+    Handles:
+    - Clean JSON
+    - JSON wrapped in markdown code fences
+    - Malformed JSON fallback
+    """
+    cleaned = full_response.strip()
+    
+    # Strip markdown code fences if present
+    if cleaned.startswith("```"):
+        lines = cleaned.split("\n")
+        # Remove first line (```json or ```)
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        # Remove last line (```)
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        cleaned = "\n".join(lines)
+    
+    try:
+        parsed = json.loads(cleaned)
+        # Validate required fields
+        if not isinstance(parsed.get("sections"), list):
+            raise ValueError("Missing or invalid 'sections' field")
+        
+        return {
+            "intent": parsed.get("intent", "general"),
+            "audience": parsed.get("audience", "patient"),
+            "urgency": parsed.get("urgency", "routine"),
+            "summary": parsed.get("summary", ""),
+            "blocks": parsed["sections"],
+            "safety_note": parsed.get("safety_note"),
+            "sources": parsed.get("sources", []),
+        }
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"[parse_ai_response] JSON parse failed: {e}")
+        # Fallback: wrap plain text as explanation block
+        return {
+            "intent": "general",
+            "audience": "patient",
+            "urgency": "routine",
+            "summary": "",
+            "blocks": [{"type": "explanation", "content": full_response}],
+            "safety_note": None,
+            "sources": [],
+        }
 
 
 async def chat_websocket(websocket: WebSocket, user_id: str):
@@ -299,8 +378,6 @@ async def chat_websocket(websocket: WebSocket, user_id: str):
                     ))
                 
                 # Get user's API key
-                from database import get_setting
-                from encryption import decrypt_value
                 api_key = get_setting("gemini_api_key", user_id=user_id)
                 if not api_key:
                     await websocket.send_json({
@@ -310,79 +387,68 @@ async def chat_websocket(websocket: WebSocket, user_id: str):
                     continue
                 
                 decrypted_key = decrypt_value(api_key)
-                from google import genai
                 client = genai.Client(api_key=decrypted_key)
+                
+                # Always fetch patient data and inject into context
+                patient_data = get_patient_lab_data(user_id=user_id)
+                knowledge_base = get_cml_knowledge_base()
+                patient_context = f"\n\n[CML KNOWLEDGE BASE]\n{knowledge_base}\n\n[PATIENT DATA - Always use this when answering questions about lab results, treatment progress, or milestones]\nLab Results: {json.dumps(patient_data['lab_results'], default=str)}\nTreatments: {json.dumps(patient_data['treatments'], default=str)}\nAchieved Milestones: {json.dumps(patient_data['milestones'], default=str)}\nCheckup Records: {json.dumps(patient_data['checkup_records'], default=str)}"
                 
                 # Process with Gemini
                 config = types.GenerateContentConfig(
-                    system_instruction=SYSTEM_INSTRUCTION,
-                    tools=tools,
-                    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
+                    system_instruction=SYSTEM_INSTRUCTION + patient_context,
                 )
                 
                 # Send thinking status
                 await websocket.send_json({"type": "status", "content": "Thinking..."})
                 
-                # Loop: handle tool calls until model returns text
-                for _ in range(5):  # max 5 tool call rounds
-                    response = client.models.generate_content(
-                        model=MODEL_NAME,
-                        contents=contents,
-                        config=config
-                    )
-                    
-                    if not response.function_calls:
-                        break  # no tool calls, we have text
-                    
-                    for function_call in response.function_calls:
-                        name = function_call.name
-                        args = function_call.args
+                # Stream response directly (no tool calls)
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        response_stream = client.models.generate_content_stream(
+                            model=MODEL_NAME,
+                            contents=contents,
+                            config=config
+                        )
                         
-                        # Add user_id to lab data tool calls
-                        if name == "get_patient_lab_data":
-                            args["user_id"] = user_id
+                        full_response = ""
+                        for chunk in response_stream:
+                            if chunk.text:
+                                await websocket.send_json({
+                                    "type": "token",
+                                    "content": chunk.text
+                                })
+                                full_response += chunk.text
+                        break  # success, exit retry loop
                         
-                        await websocket.send_json({
-                            "type": "tool_call",
-                            "tool": name,
-                            "args": args
-                        })
-                        
-                        tool_func = tools_map.get(name)
-                        if tool_func:
-                            tool_result = await asyncio.to_thread(tool_func, **args)
-                            await websocket.send_json({
-                                "type": "tool_result",
-                                "tool": name,
-                                "result": str(tool_result)[:500]
-                            })
-                            
-                            contents.append(response.candidates[0].content)
-                            contents.append(types.Content(
-                                role="tool",
-                                parts=[types.Part.from_function_response(
-                                    name=name,
-                                    response={"result": tool_result}
-                                )]
-                            ))
+                    except Exception as stream_error:
+                        error_str = str(stream_error)
+                        if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                            if attempt < max_retries - 1:
+                                wait_time = (2 ** attempt) * 2  # 2s, 4s
+                                await websocket.send_json({
+                                    "type": "status",
+                                    "content": f"Rate limited, retrying in {wait_time}s..."
+                                })
+                                await asyncio.sleep(wait_time)
+                                continue
+                        raise  # re-raise non-rate-limit errors
                 
-                # Stream final response
-                await websocket.send_json({"type": "status", "content": "Generating response..."})
+                # Parse the JSON response into blocks
+                parsed = parse_ai_response(full_response)
                 
-                response_stream = client.models.generate_content_stream(
-                    model=MODEL_NAME,
-                    contents=contents,
-                    config=config
-                )
-                
-                full_response = ""
-                for chunk in response_stream:
-                    if chunk.text:
-                        await websocket.send_json({
-                            "type": "token",
-                            "content": chunk.text
-                        })
-                        full_response += chunk.text
+                # Send structured blocks to frontend
+                await websocket.send_json({
+                    "type": "blocks",
+                    "blocks": parsed["blocks"],
+                    "summary": parsed["summary"],
+                    "safety_note": parsed["safety_note"],
+                    "sources": parsed["sources"],
+                    "intent": parsed["intent"],
+                    "audience": parsed["audience"],
+                    "urgency": parsed["urgency"],
+                })
                 
                 # Send completion
                 await websocket.send_json({

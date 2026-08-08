@@ -49,6 +49,7 @@ interface DashboardProps {
 export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [silentRefreshing, setSilentRefreshing] = useState(false);
   const [entryOpen, setEntryOpen] = useState(false);
   const [treatmentOpen, setTreatmentOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
@@ -68,6 +69,19 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
       console.error('Failed to fetch dashboard:', error);
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const silentRefresh = useCallback(async () => {
+    try {
+      setSilentRefreshing(true);
+      const response = await apiClient.get('/api/dashboard/full');
+      const result = await response.json();
+      setData(result);
+    } catch (error) {
+      console.error('Failed to refresh dashboard:', error);
+    } finally {
+      setSilentRefreshing(false);
     }
   }, []);
 
@@ -139,50 +153,55 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
   return (
     <Box sx={{ flex: 1, overflow: 'auto', p: 3 }} className="stagger-in">
       {/* ── Header ── */}
-      <Box sx={{ mb: 4, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <Box>
+      <Box sx={{ mb: 4 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
           <Typography
             variant="h4"
             sx={{
               fontFamily: '"Space Grotesk", sans-serif',
               fontWeight: 700,
-              mb: 0.5,
+              fontSize: { xs: '1.5rem', sm: '2.125rem' },
             }}
           >
             Dashboard
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Your treatment snapshot — updated as you log results
-          </Typography>
+          <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+            {silentRefreshing && (
+              <CircularProgress size={14} sx={{ color: 'text.secondary', mr: 0.5 }} />
+            )}
+            <Tooltip title="Refresh data">
+              <IconButton
+                onClick={fetchDashboard}
+                size="small"
+                sx={{
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  '&:hover': { borderColor: 'primary.main' },
+                }}
+              >
+                <RefreshIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Delete all records">
+              <IconButton
+                onClick={() => setResetDialogOpen(true)}
+                size="small"
+                color="error"
+                sx={{
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  '&:hover': { borderColor: 'error.main' },
+                }}
+              >
+                <DeleteOutlineIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
         </Box>
-        <Box sx={{ display: 'flex', gap: 0.75, alignItems: 'center' }}>
-          <Tooltip title="Refresh data">
-            <IconButton
-              onClick={fetchDashboard}
-              size="small"
-              sx={{
-                border: '1px solid',
-                borderColor: 'divider',
-                '&:hover': { borderColor: 'primary.main' },
-              }}
-            >
-              <RefreshIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Delete all records">
-            <IconButton
-              onClick={() => setResetDialogOpen(true)}
-              size="small"
-              color="error"
-              sx={{
-                border: '1px solid',
-                borderColor: 'divider',
-                '&:hover': { borderColor: 'error.main' },
-              }}
-            >
-              <DeleteOutlineIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Tooltip>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          Your treatment snapshot — updated as you log results
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
           <Button
             variant="contained"
             size="small"
@@ -236,7 +255,7 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
         }}
       >
         <CardContent sx={{ p: 3.5 }}>
-          <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'flex-start', sm: 'flex-start' }, justifyContent: 'space-between', mb: 2, gap: 2 }}>
             <Box>
               <Typography
                 variant="caption"
@@ -255,7 +274,7 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
                   className="gradient-text"
                   sx={{
                     fontFamily: '"Space Grotesk", sans-serif',
-                    fontSize: '3rem',
+                    fontSize: { xs: '2.25rem', sm: '3rem' },
                     fontWeight: 700,
                     lineHeight: 1,
                     letterSpacing: '-0.03em',
@@ -323,7 +342,7 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
       >
         Blood counts
       </Typography>
-      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 4 }}>
         <Card elevation={0}>
           <CardContent sx={{ p: 2.5 }}>
             <CBCResults testType="cbc_platelets" title="Platelets" unit="K/µL" data={data.lab_results.cbc_platelets} />
@@ -334,8 +353,6 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
             <CBCResults testType="cbc_hemoglobin" title="Hemoglobin" unit="g/dL" data={data.lab_results.cbc_hemoglobin} />
           </CardContent>
         </Card>
-      </Box>
-      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 4 }}>
         <Card elevation={0}>
           <CardContent sx={{ p: 2.5 }}>
             <CBCResults testType="cbc_wbc" title="White Blood Cells" unit="K/µL" data={data.lab_results.cbc_wbc} />
@@ -350,7 +367,7 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
 
       {/* ── Lab Summary Table ── */}
       <Box sx={{ mb: 4 }}>
-        <LabSummaryTable refreshKey={refreshKey} onRefresh={fetchDashboard} data={data.lab_results.all} />
+        <LabSummaryTable refreshKey={refreshKey} onRefresh={silentRefresh} data={data.lab_results.all} />
       </Box>
 
       {/* ── Checkup Records ── */}
@@ -406,7 +423,7 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
       <Dialog
         open={resetDialogOpen}
         onClose={() => setResetDialogOpen(false)}
-        PaperProps={{ sx: { borderRadius: 3, minWidth: 400 } }}
+        PaperProps={{ sx: { borderRadius: 3, minWidth: { xs: 'auto', sm: 400 }, mx: { xs: 2, sm: 0 } } }}
       >
         <DialogTitle sx={{ fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600 }}>
           Delete all records?
@@ -441,7 +458,7 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
           setConfirmDialogOpen(false);
           setConfirmText('');
         }}
-        PaperProps={{ sx: { borderRadius: 3, minWidth: 400 } }}
+        PaperProps={{ sx: { borderRadius: 3, minWidth: { xs: 'auto', sm: 400 }, mx: { xs: 2, sm: 0 } } }}
       >
         <DialogTitle sx={{ fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600 }}>
           Type DELETE to confirm
@@ -488,9 +505,9 @@ export const Dashboard = ({ refreshKey = 0 }: DashboardProps) => {
       </Dialog>
 
       {/* ── Dialogs ── */}
-      <DataEntryDialog open={entryOpen} onClose={() => setEntryOpen(false)} onSaved={fetchDashboard} />
-      <TreatmentEntryDialog open={treatmentOpen} onClose={() => setTreatmentOpen(false)} onSaved={fetchDashboard} />
-      <FileUploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} onSaved={fetchDashboard} />
+      <DataEntryDialog open={entryOpen} onClose={() => setEntryOpen(false)} onSaved={silentRefresh} />
+      <TreatmentEntryDialog open={treatmentOpen} onClose={() => setTreatmentOpen(false)} onSaved={silentRefresh} />
+      <FileUploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} onSaved={silentRefresh} />
     </Box>
   );
 };

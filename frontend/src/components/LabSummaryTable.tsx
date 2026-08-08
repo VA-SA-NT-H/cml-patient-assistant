@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Typography, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField } from '@mui/material';
+import { Box, Typography, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, CircularProgress } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -88,6 +88,7 @@ export const LabSummaryTable = ({ onRefresh, data }: Props) => {
   const [deleteDate, setDeleteDate] = useState<string>('');
   const [deleteResults, setDeleteResults] = useState<Record<string, { id: number }>>({});
   const [deleting, setDeleting] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const handleEdit = (date: string, results: Record<string, { id: number; value: string; unit: string }>) => {
     setSelectedDate(date);
@@ -119,6 +120,7 @@ export const LabSummaryTable = ({ onRefresh, data }: Props) => {
   };
 
   const handleSaveEdit = async () => {
+    setSaving(true);
     try {
       for (const r of editResults) {
         if (!r.value) continue;
@@ -144,6 +146,8 @@ export const LabSummaryTable = ({ onRefresh, data }: Props) => {
       onRefresh?.();
     } catch (err) {
       console.error('Failed to update:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -314,7 +318,7 @@ export const LabSummaryTable = ({ onRefresh, data }: Props) => {
       </Box>
 
       {/* Edit Dialog - All results for this date */}
-      <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={editOpen} onClose={() => !saving && setEditOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Edit results — {formatDate(selectedDate)}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 1 }}>
@@ -362,9 +366,12 @@ export const LabSummaryTable = ({ onRefresh, data }: Props) => {
             )}
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditOpen(false)}>Cancel</Button>
-          <Button onClick={handleSaveEdit} variant="contained">Save all</Button>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setEditOpen(false)} disabled={saving}>Cancel</Button>
+          <Button onClick={handleSaveEdit} variant="contained" disabled={saving}>
+            {saving ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+            {saving ? 'Saving...' : 'Save all'}
+          </Button>
         </DialogActions>
       </Dialog>
 

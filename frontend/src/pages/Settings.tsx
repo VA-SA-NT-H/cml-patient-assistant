@@ -106,19 +106,23 @@ export const Settings = () => {
         flex: 1,
         overflow: 'auto',
         display: 'flex',
+        flexDirection: { xs: 'column', md: 'row' },
         animation: 'fadeIn 0.3s ease-out',
       }}
     >
       {/* Left nav */}
       <Box
         sx={{
-          width: 240,
+          width: { xs: 'auto', md: 240 },
           flexShrink: 0,
-          borderRight: '1px solid',
+          borderRight: { xs: 'none', md: '1px solid' },
+          borderBottom: { xs: '1px solid', md: 'none' },
           borderColor: 'divider',
           p: 3,
           display: 'flex',
-          flexDirection: 'column',
+          flexDirection: { xs: 'row', md: 'column' },
+          alignItems: { xs: 'center', md: 'flex-start' },
+          gap: { xs: 2, md: 0 },
         }}
       >
         <Typography

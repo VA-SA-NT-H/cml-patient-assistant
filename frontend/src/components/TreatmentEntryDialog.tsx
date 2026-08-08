@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, MenuItem, Box } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, MenuItem, Box, CircularProgress } from '@mui/material';
 import { apiClient } from '../api';
 
 interface Props {
@@ -24,6 +24,7 @@ export const TreatmentEntryDialog = ({ open, onClose, onSaved }: Props) => {
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const handleSubmit = async () => {
     if (!drugName) {
@@ -36,6 +37,7 @@ export const TreatmentEntryDialog = ({ open, onClose, onSaved }: Props) => {
     }
 
     try {
+      setSaving(true);
       await apiClient.post('/api/treatments', {
         drug_name: drugName,
         dosage_mg: parseInt(dosage),
@@ -52,11 +54,13 @@ export const TreatmentEntryDialog = ({ open, onClose, onSaved }: Props) => {
       onClose();
     } catch (err) {
       setError('Failed to save. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={() => !saving && onClose()} maxWidth="sm" fullWidth>
       <DialogTitle>Add Treatment</DialogTitle>
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
@@ -88,9 +92,12 @@ export const TreatmentEntryDialog = ({ open, onClose, onSaved }: Props) => {
             onChange={(e) => setReason(e.target.value)} multiline rows={2} />
         </Box>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={handleSubmit} variant="contained">Save</Button>
+      <DialogActions sx={{ px: 3, pb: 2.5 }}>
+        <Button onClick={onClose} disabled={saving}>Cancel</Button>
+        <Button onClick={handleSubmit} variant="contained" disabled={saving}>
+          {saving ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+          {saving ? 'Saving...' : 'Save'}
+        </Button>
       </DialogActions>
     </Dialog>
   );
