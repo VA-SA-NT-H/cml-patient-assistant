@@ -45,6 +45,7 @@ export const ChatMessage = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(content);
   const [copied, setCopied] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   
   const handleCopy = () => {
     onCopy(content);
@@ -85,7 +86,7 @@ export const ChatMessage = ({
         animation: 'fadeInUp 0.35s ease-out both',
       }}
       onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseLeave={() => { setIsHovered(false); setDeleteConfirm(false); }}
     >
       {/* Avatar */}
       <Avatar
@@ -290,10 +291,24 @@ export const ChatMessage = ({
               </IconButton>
             </Tooltip>
             <Tooltip title="Delete">
-              <IconButton size="small" onClick={() => onDelete?.(id)} sx={{ color: 'text.secondary', '&:hover': { color: 'error.main' } }}>
+              <IconButton size="small" onClick={() => setDeleteConfirm(true)} sx={{ color: 'text.secondary', '&:hover': { color: 'error.main' } }}>
                 <DeleteIcon sx={{ fontSize: 16 }} />
               </IconButton>
             </Tooltip>
+            {deleteConfirm && (
+              <>
+                <Tooltip title="Confirm delete">
+                  <IconButton size="small" onClick={() => onDelete?.(id)} sx={{ color: 'error.main' }}>
+                    <CheckIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="Cancel">
+                  <IconButton size="small" onClick={() => setDeleteConfirm(false)} sx={{ color: 'text.secondary' }}>
+                    <CloseIcon sx={{ fontSize: 16 }} />
+                  </IconButton>
+                </Tooltip>
+              </>
+            )}
           </Box>
         )}
         
