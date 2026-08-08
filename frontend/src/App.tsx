@@ -44,6 +44,31 @@ const QUICK_STARTERS = [
   { icon: <FavoriteIcon sx={{ fontSize: 16 }} />, label: 'Lifestyle tips', message: 'What lifestyle changes can help me manage CML better?' },
 ];
 
+function parseStoredMessage(msg: Message): Message {
+  if (msg.role !== 'assistant' || msg.blocks) return msg;
+  let cleaned = msg.content.trim();
+  if (cleaned.startsWith("```")) {
+    const lines = cleaned.split("\n");
+    if (lines[0].startsWith("```")) lines.shift();
+    if (lines.length && lines[lines.length - 1].trim() === "```") lines.pop();
+    cleaned = lines.join("\n");
+  }
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed.sections)) {
+      return {
+        ...msg,
+        blocks: parsed.sections,
+        summary: parsed.summary || "",
+        safety_note: parsed.safety_note || null,
+        sources: parsed.sources || [],
+        urgency: parsed.urgency || "routine",
+      };
+    }
+  } catch {}
+  return msg;
+}
+
 function formatSessionDate(): string {
   const now = new Date();
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -136,7 +161,7 @@ function App() {
     try {
       const response = await apiClient.get(`/api/sessions/${sessionId}/messages`);
       const data = await response.json();
-      setMessages(data);
+      setMessages(data.map(parseStoredMessage));
     } catch (error) {
       console.error('Failed to fetch messages:', error);
     }
@@ -268,42 +293,47 @@ function App() {
     }
   };
 
-  const handleEditMessage = async (messageId: number, newContent: string) => {
-    if (!currentSessionId || isLoading) return;
-    
-    try {
-      // Update message in backend
-      await apiClient.put(`/api/sessions/${currentSessionId}/messages/${messageId}`, {
-        content: newContent
-      });
-      
-      // Find the message and the next AI reply
-      setMessages(prev => {
-        const msgIndex = prev.findIndex(m => m.id === messageId);
-        if (msgIndex === -1) return prev;
-        
-        // Mark message as edited
-        const updatedMsg = { ...prev[msgIndex], content: newContent, edited: true };
-        
-        // Check if next message is AI reply
-        const nextMsg = prev[msgIndex + 1];
-        if (nextMsg?.role === 'assistant') {
-          // Replace user message and remove AI reply
-          return [...prev.slice(0, msgIndex), updatedMsg, ...prev.slice(msgIndex + 2)];
-        }
-        // Just update the user message
-        return [...prev.slice(0, msgIndex), updatedMsg, ...prev.slice(msgIndex + 1)];
-      });
-      
-      // Send new message for AI response
-      handleSendMessage(newContent);
-    } catch (error) {
-      console.error('Failed to edit message:', error);
+  const formatCopiedText = (content: string): string => {
+    let cleaned = content.trim();
+    if (cleaned.startsWith("```")) {
+      const lines = cleaned.split("\n");
+      if (lines[0].startsWith("```")) lines.shift();
+      if (lines.length && lines[lines.length - 1].trim() === "```") lines.pop();
+      cleaned = lines.join("\n");
     }
+    try {
+      const parsed = JSON.parse(cleaned);
+      if (parsed.summary || Array.isArray(parsed.sections)) {
+        const parts: string[] = [];
+        if (parsed.summary) parts.push(parsed.summary);
+        if (Array.isArray(parsed.sections)) {
+          for (const section of parsed.sections) {
+            if (section.title) parts.push(`\n${section.title}:`);
+            if (typeof section.content === 'string') parts.push(section.content);
+            else if (Array.isArray(section.content)) parts.push(section.content.map((c: string) => `• ${c}`).join('\n'));
+          }
+        }
+        if (parsed.safety_note) parts.push(`\n⚠ ${parsed.safety_note}`);
+        return parts.join('\n');
+      }
+    } catch {}
+    return content;
   };
 
-  const handleCopyMessage = (content: string) => {
-    navigator.clipboard.writeText(content);
+  const handleCopyMessage = async (content: string) => {
+    const text = formatCopiedText(content);
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
   };
 
   return (
@@ -498,7 +528,6 @@ function App() {
                       sources={message.sources}
                       urgency={message.urgency}
                       onCopy={handleCopyMessage}
-                      onEdit={message.role === 'user' ? handleEditMessage : undefined}
                       onDelete={message.role === 'user' ? handleDeleteMessage : undefined}
                       disabled={isLoading}
                     />

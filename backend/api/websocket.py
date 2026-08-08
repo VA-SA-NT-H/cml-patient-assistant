@@ -256,7 +256,7 @@ def normalize_date_range(date_range: str) -> str:
 
 def get_patient_lab_data(test_type: str = None, date_range: str = None, user_id: str = None) -> dict:
     """Query patient's lab history for chatbot context."""
-    from database import get_lab_results, get_treatments, get_milestones, get_checkup_records
+    from database import get_lab_results, get_treatments, compute_milestones, get_checkup_records
 
     # Normalize parameters
     normalized_test_type = normalize_test_type(test_type)
@@ -266,7 +266,7 @@ def get_patient_lab_data(test_type: str = None, date_range: str = None, user_id:
     
     lab_results = get_lab_results(normalized_test_type, user_id=user_id)
     treatments = get_treatments(user_id=user_id)
-    milestones = get_milestones(user_id=user_id)
+    milestones = compute_milestones(user_id=user_id)
     checkup_records = get_checkup_records(user_id=user_id)
     
     print(f"[get_patient_lab_data] lab_results={len(lab_results)}, treatments={len(treatments)}, milestones={len(milestones)}, checkup_records={len(checkup_records)}")

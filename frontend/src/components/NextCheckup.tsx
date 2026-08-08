@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Box, Typography, Button, TextField, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import EventIcon from '@mui/icons-material/Event';
 import ChecklistIcon from '@mui/icons-material/Checklist';
@@ -14,36 +14,63 @@ interface NextCheckupProps {
 export const NextCheckup = ({ date, bringItems }: NextCheckupProps) => {
   const [nextDate, setNextDate] = useState<string | null>(date);
   const [bringItemsText, setBringItems] = useState<string>(bringItems || '');
+  const [reminderId, setReminderId] = useState<number | null>(null);
   const { mode } = useTheme();
   const [editOpen, setEditOpen] = useState(false);
   const [formDate, setFormDate] = useState('');
   const [formBringItems, setFormBringItems] = useState('');
 
+  useEffect(() => {
+    const fetchReminder = async () => {
+      try {
+        const response = await apiClient.get('/api/checkup-reminders');
+        const data = await response.json();
+        if (data.length > 0) {
+          setReminderId(data[0].id);
+          setNextDate(data[0].reminder_date);
+          setBringItems(data[0].bring_items || '');
+        }
+      } catch (err) {
+        console.error('Failed to fetch reminder:', err);
+      }
+    };
+    fetchReminder();
+  }, []);
+
   const handleSave = async () => {
     try {
-      await Promise.all([
-        apiClient.post(`/api/settings?key=next_checkup_date&value=${formDate}`),
-        apiClient.post(`/api/settings?key=next_checkup_bring_items&value=${encodeURIComponent(formBringItems)}`),
-      ]);
+      if (reminderId) {
+        await apiClient.put(`/api/checkup-reminders/${reminderId}`, {
+          reminder_date: formDate,
+          bring_items: formBringItems,
+        });
+      } else {
+        const response = await apiClient.post('/api/checkup-reminders', {
+          reminder_date: formDate,
+          bring_items: formBringItems,
+        });
+        const data = await response.json();
+        setReminderId(data.id);
+      }
       setNextDate(formDate);
       setBringItems(formBringItems);
       setEditOpen(false);
     } catch (err) {
-      console.error('Failed to save settings:', err);
+      console.error('Failed to save reminder:', err);
     }
   };
 
   const handleClear = async () => {
     try {
-      await Promise.all([
-        apiClient.post('/api/settings?key=next_checkup_date&value='),
-        apiClient.post('/api/settings?key=next_checkup_bring_items&value='),
-      ]);
+      if (reminderId) {
+        await apiClient.delete(`/api/checkup-reminders/${reminderId}`);
+      }
       setNextDate(null);
       setBringItems('');
+      setReminderId(null);
       setEditOpen(false);
     } catch (err) {
-      console.error('Failed to clear settings:', err);
+      console.error('Failed to clear reminder:', err);
     }
   };
 

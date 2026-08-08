@@ -116,17 +116,6 @@ def init_db():
         ''')
 
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS milestones (
-                id SERIAL PRIMARY KEY,
-                milestone_type TEXT NOT NULL,
-                achieved INTEGER NOT NULL DEFAULT 0,
-                achieved_date TEXT,
-                value_at_achievement TEXT,
-                user_id TEXT REFERENCES users(user_id)
-            )
-        ''')
-
-        cursor.execute('''
             CREATE TABLE IF NOT EXISTS checkup_records (
                 id SERIAL PRIMARY KEY,
                 checkup_date TEXT NOT NULL,
@@ -147,17 +136,34 @@ def init_db():
             )
         ''')
 
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS checkup_reminders (
+                id SERIAL PRIMARY KEY,
+                reminder_date TEXT NOT NULL,
+                bring_items TEXT,
+                created_at TEXT NOT NULL,
+                user_id TEXT REFERENCES users(user_id)
+            )
+        ''')
+
         # Indexes for performance on user_id lookups
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_lab_results_user_id ON lab_results(user_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_treatments_user_id ON treatments(user_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_milestones_user_id ON milestones(user_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_checkup_records_user_id ON checkup_records(user_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_checkup_reminders_user_id ON checkup_reminders(user_id)')
 
         conn.commit()
         conn.close()
         print("[init_db] Database initialized successfully")
+        
+        # Run cleanup and migration
+        try:
+            cleanup_expired_reminders()
+            migrate_checkup_settings()
+        except Exception as e:
+            print(f"[init_db] Cleanup/migration warning: {e}")
     except Exception as e:
         print(f"[init_db] WARNING: Database initialization failed: {e}")
         print("[init_db] The app will continue starting. Tables will be created on first successful connection.")
@@ -440,15 +446,15 @@ def delete_treatment(row_id: int):
 
 
 def delete_all_lab_data(user_id: str = None):
-    """Delete all lab results, treatments, milestones, settings, checkup records, and sessions for a user."""
+    """Delete all lab results, treatments, settings, checkup records, and sessions for a user."""
     conn = get_db_connection()
     cursor = conn.cursor()
     if user_id:
         cursor.execute("DELETE FROM lab_results WHERE user_id = %s", (user_id,))
         cursor.execute("DELETE FROM treatments WHERE user_id = %s", (user_id,))
-        cursor.execute("DELETE FROM milestones WHERE user_id = %s", (user_id,))
         cursor.execute("DELETE FROM user_settings WHERE user_id = %s", (user_id,))
         cursor.execute("DELETE FROM checkup_records WHERE user_id = %s", (user_id,))
+        cursor.execute("DELETE FROM checkup_reminders WHERE user_id = %s", (user_id,))
         cursor.execute("SELECT session_id FROM sessions WHERE user_id = %s", (user_id,))
         session_ids = [row[0] for row in cursor.fetchall()]
         if session_ids:
@@ -458,84 +464,51 @@ def delete_all_lab_data(user_id: str = None):
     else:
         cursor.execute("DELETE FROM lab_results")
         cursor.execute("DELETE FROM treatments")
-        cursor.execute("DELETE FROM milestones")
         cursor.execute("DELETE FROM user_settings")
         cursor.execute("DELETE FROM checkup_records")
+        cursor.execute("DELETE FROM checkup_reminders")
         cursor.execute("DELETE FROM messages")
         cursor.execute("DELETE FROM sessions")
     conn.commit()
     conn.close()
 
-    # Re-initialize default milestones
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    for m in ['ccyr', 'mmr', 'mr4', 'mr4_5']:
-        if user_id:
-            cursor.execute(
-                "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement, user_id) VALUES (%s, 0, NULL, NULL, %s)",
-                (m, user_id)
-            )
-        else:
-            cursor.execute(
-                "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement) VALUES (%s, 0, NULL, NULL)",
-                (m,)
-            )
-    conn.commit()
-    conn.close()
 
+def compute_milestones(user_id: str = None) -> list:
+    """Compute milestones on-the-fly from the latest BCR-ABL1 lab result."""
+    results = get_lab_results(test_type="bcr_abl1", user_id=user_id)
+    if not results:
+        return []
 
-def save_milestone(milestone_type: str, achieved: bool, achieved_date: str = None,
-                   value_at_achievement: str = None):
-    """Save or update a milestone."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE milestones SET achieved = %s, achieved_date = %s, value_at_achievement = %s WHERE milestone_type = %s",
-        (1 if achieved else 0, achieved_date, value_at_achievement, milestone_type)
-    )
-    if cursor.rowcount == 0:
-        cursor.execute(
-            "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement) VALUES (%s, %s, %s, %s)",
-            (milestone_type, 1 if achieved else 0, achieved_date, value_at_achievement)
-        )
-    conn.commit()
-    conn.close()
+    latest = max(results, key=lambda x: x["test_date"])
 
-
-def get_milestones(user_id: str = None):
-    """Retrieve all milestones. Optional filter by user_id."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    query = "SELECT id, milestone_type, achieved, achieved_date, value_at_achievement FROM milestones"
-    params = []
-
-    if user_id:
-        query += " WHERE user_id = %s"
-        params.append(user_id)
-
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
-    conn.close()
-    return [
-        {"id": r[0], "milestone_type": r[1], "achieved": bool(r[2]),
-         "achieved_date": r[3],
-         "value_at_achievement": r[4]}
-        for r in rows
+    milestones_def = [
+        ("ccyr", 1.0, "Complete Cytogenetic Response"),
+        ("mmr", 0.1, "Major Molecular Response"),
+        ("mr4", 0.01, "MR4"),
+        ("mr4_5", 0.0032, "MR4.5"),
     ]
 
-
-def update_milestone(milestone_type: str, achieved: bool, achieved_date: str = None,
-                     value_at_achievement: str = None):
-    """Update a milestone by type."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE milestones SET achieved = %s, achieved_date = %s, value_at_achievement = %s WHERE milestone_type = %s",
-        (1 if achieved else 0, achieved_date, value_at_achievement, milestone_type)
-    )
-    conn.commit()
-    conn.close()
+    output = []
+    for milestone_type, threshold, label in milestones_def:
+        achieved = False
+        achieved_date = None
+        achieved_value = None
+        try:
+            cleaned = latest["value"].replace("%", "").replace(" ", "").strip()
+            val = float(cleaned)
+            if val <= threshold:
+                achieved = True
+                achieved_date = latest["test_date"]
+                achieved_value = latest["value"]
+        except (ValueError, TypeError):
+            pass
+        output.append({
+            "milestone_type": milestone_type,
+            "achieved": achieved,
+            "achieved_date": achieved_date,
+            "value_at_achievement": achieved_value,
+        })
+    return output
 
 
 def save_checkup_record(checkup_date: str, doctor_advice: str = None,
@@ -631,5 +604,107 @@ def save_setting(key: str, value: str, user_id: str = None):
             "INSERT INTO user_settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
             (key, value)
         )
+    conn.commit()
+    conn.close()
+
+
+def save_checkup_reminder(reminder_date: str, bring_items: str, user_id: str) -> int:
+    """Save a checkup reminder. Returns the new row ID."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO checkup_reminders (reminder_date, bring_items, created_at, user_id) VALUES (%s, %s, %s, %s) RETURNING id",
+        (reminder_date, bring_items, datetime.now().strftime("%Y-%m-%d %H:%M"), user_id)
+    )
+    row_id = cursor.fetchone()[0]
+    conn.commit()
+    conn.close()
+    return row_id
+
+
+def get_checkup_reminders(user_id: str) -> list:
+    """Retrieve all checkup reminders for a user."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, reminder_date, bring_items, created_at FROM checkup_reminders WHERE user_id = %s ORDER BY reminder_date ASC",
+        (user_id,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"id": id, "reminder_date": rd, "bring_items": bi, "created_at": ca} for id, rd, bi, ca in rows]
+
+
+def update_checkup_reminder(reminder_id: int, reminder_date: str, bring_items: str) -> bool:
+    """Update a checkup reminder. Returns True if updated."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE checkup_reminders SET reminder_date = %s, bring_items = %s WHERE id = %s",
+        (reminder_date, bring_items, reminder_id)
+    )
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return updated
+
+
+def delete_checkup_reminder(reminder_id: int) -> bool:
+    """Delete a checkup reminder. Returns True if deleted."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM checkup_reminders WHERE id = %s", (reminder_id,))
+    deleted = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
+
+
+def cleanup_expired_reminders() -> int:
+    """Delete all reminders where reminder_date is in the past. Returns count deleted."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM checkup_reminders WHERE reminder_date < CURRENT_DATE::text")
+    count = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return count
+
+
+def migrate_checkup_settings():
+    """Migrate next_checkup_date and next_checkup_bring_items from user_settings to checkup_reminders."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Check if migration already done
+    cursor.execute("SELECT value FROM user_settings WHERE key = 'checkup_migration_done' LIMIT 1")
+    if cursor.fetchone():
+        conn.close()
+        return
+    
+    # Get all users with checkup settings
+    cursor.execute("SELECT user_id, value FROM user_settings WHERE key = 'next_checkup_date' AND value != ''")
+    rows = cursor.fetchall()
+    
+    for user_id, checkup_date in rows:
+        # Get bring items for this user
+        cursor.execute("SELECT value FROM user_settings WHERE key = 'next_checkup_bring_items' AND user_id = %s", (user_id,))
+        bring_row = cursor.fetchone()
+        bring_items = bring_row[0] if bring_row else ''
+        
+        # Insert into checkup_reminders
+        cursor.execute(
+            "INSERT INTO checkup_reminders (reminder_date, bring_items, created_at, user_id) VALUES (%s, %s, %s, %s)",
+            (checkup_date, bring_items, datetime.now().strftime("%Y-%m-%d %H:%M"), user_id)
+        )
+        
+        # Delete old keys
+        cursor.execute("DELETE FROM user_settings WHERE key IN ('next_checkup_date', 'next_checkup_bring_items') AND user_id = %s", (user_id,))
+    
+    # Mark migration done
+    cursor.execute(
+        "INSERT INTO user_settings (key, value, user_id) VALUES ('checkup_migration_done', 'true', 'system') ON CONFLICT DO NOTHING"
+    )
+    
     conn.commit()
     conn.close()

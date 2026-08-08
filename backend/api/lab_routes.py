@@ -9,9 +9,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from database import (
     save_lab_result, get_lab_results, update_lab_result, delete_lab_result,
     save_treatment, get_treatments, update_treatment, delete_treatment,
-    get_milestones, delete_all_lab_data,
+    compute_milestones, delete_all_lab_data,
     save_checkup_record, get_checkup_records, update_checkup_record, delete_checkup_record,
-    get_setting, save_setting
+    get_setting, save_setting,
+    save_checkup_reminder, get_checkup_reminders, update_checkup_reminder, delete_checkup_reminder
 )
 from api.upload_parser import parse_csv, parse_pdf, parse_image
 from lab_warnings import check_trends
@@ -22,89 +23,12 @@ router = APIRouter(prefix="/api", tags=["lab-results"])
 
 
 class LabResultCreate(BaseModel):
-    test_type: str
-    value: str
-    unit: str
+    test_type: Optional[str] = None
+    value: Optional[str] = None
+    unit: Optional[str] = None
     reference_range: Optional[str] = None
-    test_date: str
+    test_date: Optional[str] = None
     notes: Optional[str] = None
-
-
-def recalculate_milestones(user_id: str = None):
-    """Recalculate all milestones from all existing BCR-ABL1 results."""
-    import psycopg2
-    import psycopg2.extras
-    from database import DATABASE_URL
-
-    milestones = [
-        ("ccyr", 1.0),
-        ("mmr", 0.1),
-        ("mr4", 0.01),
-        ("mr4_5", 0.0032),
-    ]
-
-    try:
-        results = get_lab_results(test_type="bcr_abl1", user_id=user_id)
-        print(f"[milestones] Found {len(results)} decrypted BCR-ABL1 results")
-
-        conn = psycopg2.connect(DATABASE_URL)
-        cursor = conn.cursor()
-
-        # Find the latest BCR-ABL1 result (most recent test_date)
-        latest_result = None
-        for r in results:
-            try:
-                if latest_result is None or r["test_date"] > latest_result["test_date"]:
-                    latest_result = r
-            except Exception:
-                continue
-
-        if latest_result:
-            print(f"[milestones] Latest result: {latest_result['value']} on {latest_result['test_date']}")
-        else:
-            print("[milestones] No BCR-ABL1 results found")
-
-        for milestone_type, threshold in milestones:
-            achieved = False
-            achieved_date = None
-            achieved_value = None
-
-            if latest_result:
-                try:
-                    cleaned = latest_result["value"].replace('%', '').replace(' ', '').strip()
-                    val = float(cleaned)
-                    print(f"[milestones] {milestone_type}: checking {cleaned} <= {threshold} -> {val <= threshold}")
-                    if val <= threshold:
-                        achieved = True
-                        achieved_date = latest_result["test_date"]
-                        achieved_value = latest_result["value"]
-                except ValueError as e:
-                    print(f"[milestones] Failed to parse '{latest_result['value']}': {e}")
-
-            cursor.execute(
-                "SELECT id FROM milestones WHERE milestone_type = %s AND user_id = %s",
-                (milestone_type, user_id)
-            )
-            existing = cursor.fetchone()
-
-            if existing:
-                cursor.execute(
-                    "UPDATE milestones SET achieved = %s, achieved_date = %s, value_at_achievement = %s WHERE milestone_type = %s AND user_id = %s",
-                    (1 if achieved else 0, achieved_date, achieved_value, milestone_type, user_id)
-                )
-                print(f"[milestones] Updated {milestone_type}: achieved={achieved}")
-            else:
-                cursor.execute(
-                    "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement, user_id) VALUES (%s, %s, %s, %s, %s)",
-                    (milestone_type, 1 if achieved else 0, achieved_date, achieved_value, user_id)
-                )
-                print(f"[milestones] Inserted {milestone_type}: achieved={achieved}")
-
-        conn.commit()
-        conn.close()
-        print("[milestones] Done")
-    except Exception as e:
-        print(f"[milestones] ERROR: {e}")
 
 
 class LabResultUpdate(BaseModel):
@@ -144,9 +68,6 @@ async def create_lab_result(result: LabResultCreate, user_id: str = Depends(get_
         notes=result.notes,
         user_id=user_id,
     )
-    # Recalculate milestones after saving BCR-ABL1
-    if result.test_type == "bcr_abl1":
-        recalculate_milestones(user_id=user_id)
     return LabResultResponse(
         id=row_id, test_type=result.test_type, value=result.value,
         unit=result.unit, reference_range=result.reference_range,
@@ -163,9 +84,6 @@ async def update_lab_result_endpoint(result_id: int, result: LabResultUpdate, us
         raise HTTPException(status_code=403, detail="Not authorized")
     
     update_lab_result(result_id, **result.model_dump(exclude_unset=True))
-    # Recalculate milestones if this was a BCR-ABL1 result
-    if result.test_type == "bcr_abl1" or result.value is not None:
-        recalculate_milestones(user_id=user_id)
     return {"message": "Lab result updated"}
 
 
@@ -178,7 +96,6 @@ async def delete_lab_result_endpoint(result_id: int, user_id: str = Depends(get_
         raise HTTPException(status_code=403, detail="Not authorized")
     
     delete_lab_result(result_id)
-    recalculate_milestones(user_id=user_id)
     return {"message": "Lab result deleted"}
 
 class TreatmentCreate(BaseModel):
@@ -299,9 +216,7 @@ async def get_dashboard(user_id: str = Depends(get_current_user)):
     lab_results = get_lab_results(user_id=user_id)
     treatments = get_treatments(user_id=user_id)
 
-    # Recalculate milestones on every dashboard load
-    recalculate_milestones(user_id=user_id)
-    milestones = get_milestones(user_id=user_id)
+    milestones = compute_milestones(user_id=user_id)
 
     # Latest values
     latest = {}
@@ -336,18 +251,15 @@ async def get_dashboard_full(user_id: str = Depends(get_current_user)):
             "lab_results": executor.submit(get_lab_results, None, user_id),
             "treatments": executor.submit(get_treatments, user_id),
             "checkup_records": executor.submit(get_checkup_records, user_id),
-            "next_checkup_date": executor.submit(get_setting, "next_checkup_date", user_id),
-            "next_checkup_items": executor.submit(get_setting, "next_checkup_bring_items", user_id),
+            "next_checkup_reminders": executor.submit(get_checkup_reminders, user_id),
         }
         lab_results = futures["lab_results"].result()
         treatments = futures["treatments"].result()
         checkup_records = futures["checkup_records"].result()
-        next_checkup_date = futures["next_checkup_date"].result()
-        next_checkup_items = futures["next_checkup_items"].result()
+        next_checkup_reminders = futures["next_checkup_reminders"].result()
 
-    # Recalculate milestones
-    recalculate_milestones(user_id=user_id)
-    milestones = get_milestones(user_id=user_id)
+    # Milestones
+    milestones = compute_milestones(user_id=user_id)
 
     # Latest values
     latest = {}
@@ -379,6 +291,15 @@ async def get_dashboard_full(user_id: str = Depends(get_current_user)):
         for r in lab_results
     ]
 
+    # Next checkup from reminders table
+    next_checkup = {"date": None, "bring_items": None}
+    if next_checkup_reminders:
+        latest_reminder = next_checkup_reminders[0]
+        next_checkup = {
+            "date": latest_reminder["reminder_date"],
+            "bring_items": latest_reminder["bring_items"],
+        }
+
     return {
         "latest_values": latest,
         "current_treatment": current_treatment,
@@ -388,34 +309,23 @@ async def get_dashboard_full(user_id: str = Depends(get_current_user)):
         "lab_results": lab_by_type,
         "treatments": treatments,
         "checkup_records": checkup_records,
-        "next_checkup": {
-            "date": next_checkup_date,
-            "bring_items": next_checkup_items,
-        },
+        "next_checkup": next_checkup,
     }
 
 
 @router.get("/milestones", response_model=List[dict])
 async def list_milestones(user_id: str = Depends(get_current_user)):
-    return get_milestones(user_id=user_id)
+    return compute_milestones(user_id=user_id)
 
 
 @router.get("/debug/milestones")
 async def debug_milestones(user_id: str = Depends(get_current_user)):
-    """Debug: show raw milestone data and BCR-ABL1 results for current user."""
-    import psycopg2
-    import psycopg2.extras
-    from database import DATABASE_URL
-    conn = psycopg2.connect(DATABASE_URL)
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, milestone_type, achieved, achieved_date, value_at_achievement FROM milestones WHERE user_id = %s", (user_id,))
-    milestones = cursor.fetchall()
-    cursor.execute("SELECT id, test_type, value, test_date FROM lab_results WHERE test_type = 'bcr_abl1' AND user_id = %s", (user_id,))
-    bcr_results = cursor.fetchall()
-    conn.close()
+    """Debug: show computed milestones and BCR-ABL1 results for current user."""
+    milestones = compute_milestones(user_id=user_id)
+    lab_results = get_lab_results(test_type="bcr_abl1", user_id=user_id)
     return {
-        "milestones": [{"id": r[0], "type": r[1], "achieved": r[2], "date": r[3], "value": r[4]} for r in milestones],
-        "bcr_abl1_results": [{"id": r[0], "type": r[1], "value": r[2], "date": r[3]} for r in bcr_results],
+        "milestones": milestones,
+        "bcr_abl1_results": [{"id": r["id"], "type": r["test_type"], "value": r["value"], "date": r["test_date"]} for r in lab_results],
     }
 
 
@@ -497,6 +407,68 @@ async def delete_checkup(record_id: int, user_id: str = Depends(get_current_user
         raise HTTPException(status_code=404, detail="Record not found")
     delete_checkup_record(record_id)
     return {"message": "Deleted"}
+
+
+# ==========================================
+# CHECKUP REMINDERS
+# ==========================================
+
+class CheckupReminderCreate(BaseModel):
+    reminder_date: str
+    bring_items: str = ''
+
+class CheckupReminderUpdate(BaseModel):
+    reminder_date: str
+    bring_items: str = ''
+
+class CheckupReminderResponse(BaseModel):
+    id: int
+    reminder_date: str
+    bring_items: str | None
+    created_at: str
+
+
+@router.get("/checkup-reminders", response_model=list[CheckupReminderResponse])
+async def list_checkup_reminders(user_id: str = Depends(get_current_user)):
+    reminders = get_checkup_reminders(user_id=user_id)
+    return [CheckupReminderResponse(**r) for r in reminders]
+
+
+@router.post("/checkup-reminders", response_model=CheckupReminderResponse)
+async def create_checkup_reminder(reminder: CheckupReminderCreate, user_id: str = Depends(get_current_user)):
+    row_id = save_checkup_reminder(reminder.reminder_date, reminder.bring_items, user_id=user_id)
+    return CheckupReminderResponse(
+        id=row_id,
+        reminder_date=reminder.reminder_date,
+        bring_items=reminder.bring_items,
+        created_at=""
+    )
+
+
+@router.put("/checkup-reminders/{reminder_id}")
+async def update_checkup_reminder_endpoint(reminder_id: int, reminder: CheckupReminderUpdate, user_id: str = Depends(get_current_user)):
+    reminders = get_checkup_reminders(user_id=user_id)
+    reminder_ids = [r["id"] for r in reminders]
+    if reminder_id not in reminder_ids:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    updated = update_checkup_reminder(reminder_id, reminder.reminder_date, reminder.bring_items)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Reminder not found")
+    return {"message": "Reminder updated"}
+
+
+@router.delete("/checkup-reminders/{reminder_id}")
+async def delete_checkup_reminder_endpoint(reminder_id: int, user_id: str = Depends(get_current_user)):
+    reminders = get_checkup_reminders(user_id=user_id)
+    reminder_ids = [r["id"] for r in reminders]
+    if reminder_id not in reminder_ids:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    deleted = delete_checkup_reminder(reminder_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Reminder not found")
+    return {"message": "Reminder deleted"}
 
 
 # ==========================================
