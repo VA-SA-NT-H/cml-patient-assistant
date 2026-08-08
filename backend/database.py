@@ -147,6 +147,14 @@ def init_db():
             )
         ''')
 
+        # Indexes for performance on user_id lookups
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_lab_results_user_id ON lab_results(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_treatments_user_id ON treatments(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_milestones_user_id ON milestones(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_checkup_records_user_id ON checkup_records(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id)')
+
         conn.commit()
         conn.close()
         print("[init_db] Database initialized successfully")
@@ -266,14 +274,19 @@ def get_lab_results(test_type: str = None, user_id: str = None):
     rows = cursor.fetchall()
     conn.close()
 
-    return [
-        {
-            "id": r[0], "test_type": r[1], "value": decrypt_value(r[2]),
+    results = []
+    for r in rows:
+        try:
+            decrypted_value = decrypt_value(r[2])
+        except Exception as e:
+            print(f"[get_lab_results] Decryption failed for row {r[0]}: {e}")
+            decrypted_value = "[decryption error]"
+        results.append({
+            "id": r[0], "test_type": r[1], "value": decrypted_value,
             "unit": r[3], "reference_range": r[4], "test_date": r[5],
             "notes": r[6], "created_at": r[7]
-        }
-        for r in rows
-    ]
+        })
+    return results
 
 
 def update_lab_result(row_id: int, **kwargs):
