@@ -20,7 +20,8 @@ oauth.register(
 @router.get("/google")
 async def google_login(request: Request):
     """Redirect to Google OAuth."""
-    redirect_uri = request.url_for('google_callback')
+    backend_url = os.getenv("BACKEND_URL", str(request.base_url).rstrip("/"))
+    redirect_uri = f"{backend_url}/auth/google/callback"
     return await oauth.google.authorize_redirect(request, redirect_uri)
 
 @router.get("/google/callback")
