@@ -293,12 +293,40 @@ function App() {
     }
   };
 
-  const handleCopyMessage = async (content: string) => {
+  const formatCopiedText = (content: string): string => {
+    let cleaned = content.trim();
+    if (cleaned.startsWith("```")) {
+      const lines = cleaned.split("\n");
+      if (lines[0].startsWith("```")) lines.shift();
+      if (lines.length && lines[lines.length - 1].trim() === "```") lines.pop();
+      cleaned = lines.join("\n");
+    }
     try {
-      await navigator.clipboard.writeText(content);
+      const parsed = JSON.parse(cleaned);
+      if (parsed.summary || Array.isArray(parsed.sections)) {
+        const parts: string[] = [];
+        if (parsed.summary) parts.push(parsed.summary);
+        if (Array.isArray(parsed.sections)) {
+          for (const section of parsed.sections) {
+            if (section.title) parts.push(`\n${section.title}:`);
+            if (typeof section.content === 'string') parts.push(section.content);
+            else if (Array.isArray(section.content)) parts.push(section.content.map((c: string) => `• ${c}`).join('\n'));
+          }
+        }
+        if (parsed.safety_note) parts.push(`\n⚠ ${parsed.safety_note}`);
+        return parts.join('\n');
+      }
+    } catch {}
+    return content;
+  };
+
+  const handleCopyMessage = async (content: string) => {
+    const text = formatCopiedText(content);
+    try {
+      await navigator.clipboard.writeText(text);
     } catch {
       const textarea = document.createElement('textarea');
-      textarea.value = content;
+      textarea.value = text;
       textarea.style.position = 'fixed';
       textarea.style.opacity = '0';
       document.body.appendChild(textarea);
