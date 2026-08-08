@@ -78,11 +78,6 @@ def test_add_user_id_columns():
         columns = [row[1] for row in cursor.fetchall()]
         assert "user_id" in columns
         
-        # Check milestones table
-        cursor.execute("PRAGMA table_info(milestones)")
-        columns = [row[1] for row in cursor.fetchall()]
-        assert "user_id" in columns
-        
         conn.close()
 
 def test_database_functions_accept_user_id():

@@ -116,17 +116,6 @@ def init_db():
         ''')
 
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS milestones (
-                id SERIAL PRIMARY KEY,
-                milestone_type TEXT NOT NULL,
-                achieved INTEGER NOT NULL DEFAULT 0,
-                achieved_date TEXT,
-                value_at_achievement TEXT,
-                user_id TEXT REFERENCES users(user_id)
-            )
-        ''')
-
-        cursor.execute('''
             CREATE TABLE IF NOT EXISTS checkup_records (
                 id SERIAL PRIMARY KEY,
                 checkup_date TEXT NOT NULL,
@@ -161,7 +150,6 @@ def init_db():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_lab_results_user_id ON lab_results(user_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_treatments_user_id ON treatments(user_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_milestones_user_id ON milestones(user_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_checkup_records_user_id ON checkup_records(user_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_checkup_reminders_user_id ON checkup_reminders(user_id)')
@@ -458,13 +446,12 @@ def delete_treatment(row_id: int):
 
 
 def delete_all_lab_data(user_id: str = None):
-    """Delete all lab results, treatments, milestones, settings, checkup records, and sessions for a user."""
+    """Delete all lab results, treatments, settings, checkup records, and sessions for a user."""
     conn = get_db_connection()
     cursor = conn.cursor()
     if user_id:
         cursor.execute("DELETE FROM lab_results WHERE user_id = %s", (user_id,))
         cursor.execute("DELETE FROM treatments WHERE user_id = %s", (user_id,))
-        cursor.execute("DELETE FROM milestones WHERE user_id = %s", (user_id,))
         cursor.execute("DELETE FROM user_settings WHERE user_id = %s", (user_id,))
         cursor.execute("DELETE FROM checkup_records WHERE user_id = %s", (user_id,))
         cursor.execute("DELETE FROM checkup_reminders WHERE user_id = %s", (user_id,))
@@ -477,7 +464,6 @@ def delete_all_lab_data(user_id: str = None):
     else:
         cursor.execute("DELETE FROM lab_results")
         cursor.execute("DELETE FROM treatments")
-        cursor.execute("DELETE FROM milestones")
         cursor.execute("DELETE FROM user_settings")
         cursor.execute("DELETE FROM checkup_records")
         cursor.execute("DELETE FROM checkup_reminders")
@@ -486,76 +472,43 @@ def delete_all_lab_data(user_id: str = None):
     conn.commit()
     conn.close()
 
-    # Re-initialize default milestones
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    for m in ['ccyr', 'mmr', 'mr4', 'mr4_5']:
-        if user_id:
-            cursor.execute(
-                "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement, user_id) VALUES (%s, 0, NULL, NULL, %s)",
-                (m, user_id)
-            )
-        else:
-            cursor.execute(
-                "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement) VALUES (%s, 0, NULL, NULL)",
-                (m,)
-            )
-    conn.commit()
-    conn.close()
 
+def compute_milestones(user_id: str = None) -> list:
+    """Compute milestones on-the-fly from the latest BCR-ABL1 lab result."""
+    results = get_lab_results(test_type="bcr_abl1", user_id=user_id)
+    if not results:
+        return []
 
-def save_milestone(milestone_type: str, achieved: bool, achieved_date: str = None,
-                   value_at_achievement: str = None):
-    """Save or update a milestone."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE milestones SET achieved = %s, achieved_date = %s, value_at_achievement = %s WHERE milestone_type = %s",
-        (1 if achieved else 0, achieved_date, value_at_achievement, milestone_type)
-    )
-    if cursor.rowcount == 0:
-        cursor.execute(
-            "INSERT INTO milestones (milestone_type, achieved, achieved_date, value_at_achievement) VALUES (%s, %s, %s, %s)",
-            (milestone_type, 1 if achieved else 0, achieved_date, value_at_achievement)
-        )
-    conn.commit()
-    conn.close()
+    latest = max(results, key=lambda x: x["test_date"])
 
-
-def get_milestones(user_id: str = None):
-    """Retrieve all milestones. Optional filter by user_id."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-
-    query = "SELECT id, milestone_type, achieved, achieved_date, value_at_achievement FROM milestones"
-    params = []
-
-    if user_id:
-        query += " WHERE user_id = %s"
-        params.append(user_id)
-
-    cursor.execute(query, params)
-    rows = cursor.fetchall()
-    conn.close()
-    return [
-        {"id": r[0], "milestone_type": r[1], "achieved": bool(r[2]),
-         "achieved_date": r[3],
-         "value_at_achievement": r[4]}
-        for r in rows
+    milestones_def = [
+        ("ccyr", 1.0, "Complete Cytogenetic Response"),
+        ("mmr", 0.1, "Major Molecular Response"),
+        ("mr4", 0.01, "MR4"),
+        ("mr4_5", 0.0032, "MR4.5"),
     ]
 
-
-def update_milestone(milestone_type: str, achieved: bool, achieved_date: str = None,
-                     value_at_achievement: str = None):
-    """Update a milestone by type."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE milestones SET achieved = %s, achieved_date = %s, value_at_achievement = %s WHERE milestone_type = %s",
-        (1 if achieved else 0, achieved_date, value_at_achievement, milestone_type)
-    )
-    conn.commit()
-    conn.close()
+    output = []
+    for milestone_type, threshold, label in milestones_def:
+        achieved = False
+        achieved_date = None
+        achieved_value = None
+        try:
+            cleaned = latest["value"].replace("%", "").replace(" ", "").strip()
+            val = float(cleaned)
+            if val <= threshold:
+                achieved = True
+                achieved_date = latest["test_date"]
+                achieved_value = latest["value"]
+        except (ValueError, TypeError):
+            pass
+        output.append({
+            "milestone_type": milestone_type,
+            "achieved": achieved,
+            "achieved_date": achieved_date,
+            "value_at_achievement": achieved_value,
+        })
+    return output
 
 
 def save_checkup_record(checkup_date: str, doctor_advice: str = None,
