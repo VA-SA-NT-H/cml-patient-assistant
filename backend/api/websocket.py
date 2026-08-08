@@ -225,9 +225,13 @@ def get_patient_lab_data(test_type: str = None, date_range: str = None, user_id:
     normalized_test_type = normalize_test_type(test_type)
     normalized_date_range = normalize_date_range(date_range)
     
+    print(f"[get_patient_lab_data] user_id={user_id}, test_type={normalized_test_type}, date_range={normalized_date_range}")
+    
     lab_results = get_lab_results(normalized_test_type, user_id=user_id)
     treatments = get_treatments(user_id=user_id)
     milestones = get_milestones(user_id=user_id)
+    
+    print(f"[get_patient_lab_data] lab_results={len(lab_results)}, treatments={len(treatments)}, milestones={len(milestones)}")
 
     # Filter by date range
     if normalized_date_range and normalized_date_range != "all":
