@@ -1,17 +1,77 @@
-import { Box, Typography, Paper, Avatar } from '@mui/material';
+import { useState } from 'react';
+import { Box, Typography, Paper, Avatar, IconButton, Tooltip, TextField } from '@mui/material';
 import SmartToyIcon from '@mui/icons-material/SmartToy';
 import PersonIcon from '@mui/icons-material/Person';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
 import { useTheme } from '../theme/ThemeProvider';
 import ReactMarkdown from 'react-markdown';
+import { StructuredMessage } from './StructuredMessage';
 
-interface ChatMessageProps {
-  role: 'user' | 'assistant';
-  content: string;
+interface Block {
+  type: 'explanation' | 'key_points' | 'steps' | 'table' | 'warning' | 'sources';
+  title?: string;
+  content: string | string[] | { headers: string[]; rows: string[][] };
 }
 
-export const ChatMessage = ({ role, content }: ChatMessageProps) => {
+interface ChatMessageProps {
+  id?: number;
+  role: 'user' | 'assistant';
+  content: string;
+  edited?: boolean;
+  blocks?: Block[];
+  summary?: string;
+  safety_note?: string | null;
+  sources?: string[];
+  urgency?: 'routine' | 'attention_urgent' | 'attention_emergency';
+  onCopy: (content: string) => void;
+  onEdit?: (messageId: number, newContent: string) => void;
+  onDelete?: (messageId: number) => void;
+  disabled?: boolean;
+}
+
+export const ChatMessage = ({ 
+  id, role, content, edited, blocks, summary, safety_note, sources, urgency,
+  onCopy, onEdit, onDelete, disabled 
+}: ChatMessageProps) => {
   const { mode } = useTheme();
   const isUser = role === 'user';
+  const hasBlocks = !isUser && blocks && blocks.length > 0;
+  
+  const [isHovered, setIsHovered] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(content);
+  const [copied, setCopied] = useState(false);
+  
+  const handleCopy = () => {
+    onCopy(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  
+  const handleSaveEdit = () => {
+    if (editValue.trim() && onEdit && id) {
+      onEdit(id, editValue.trim());
+      setIsEditing(false);
+    }
+  };
+  
+  const handleCancelEdit = () => {
+    setEditValue(content);
+    setIsEditing(false);
+  };
+  
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSaveEdit();
+    } else if (e.key === 'Escape') {
+      handleCancelEdit();
+    }
+  };
 
   return (
     <Box
@@ -24,6 +84,8 @@ export const ChatMessage = ({ role, content }: ChatMessageProps) => {
         flexDirection: isUser ? 'row-reverse' : 'row',
         animation: 'fadeInUp 0.35s ease-out both',
       }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Avatar */}
       <Avatar
@@ -107,19 +169,66 @@ export const ChatMessage = ({ role, content }: ChatMessageProps) => {
           }}
         >
           {isUser ? (
-            <Typography
-              variant="body1"
-              sx={{
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                fontSize: '0.875rem',
-                lineHeight: 1.7,
-                color: mode === 'dark' ? '#FFFFFF' : '#1A1A1A',
-              }}
-            >
-              {content}
-            </Typography>
-          ) : (
+            isEditing ? (
+              <Box sx={{ width: '100%' }}>
+                <TextField
+                  fullWidth
+                  multiline
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  autoFocus
+                  size="small"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      fontSize: '0.875rem',
+                      bgcolor: mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.02)',
+                    }
+                  }}
+                />
+                <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, justifyContent: 'flex-end' }}>
+                  <Tooltip title="Save (Enter)">
+                    <IconButton size="small" onClick={handleSaveEdit} sx={{ color: 'primary.main' }}>
+                      <CheckIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Cancel (Esc)">
+                    <IconButton size="small" onClick={handleCancelEdit} sx={{ color: 'text.secondary' }}>
+                      <CloseIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              </Box>
+            ) : (
+              <>
+                {edited && (
+                  <Typography variant="caption" sx={{ fontStyle: 'italic', opacity: 0.6, fontSize: '0.65rem', display: 'block', mb: 0.5 }}>
+                    edited
+                  </Typography>
+                )}
+                <Typography
+                  variant="body1"
+                  sx={{
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    fontSize: '0.875rem',
+                    lineHeight: 1.7,
+                    color: mode === 'dark' ? '#FFFFFF' : '#1A1A1A',
+                  }}
+                >
+                  {content}
+                </Typography>
+              </>
+            )
+          ) : hasBlocks ? (
+            <StructuredMessage
+              blocks={blocks}
+              summary={summary}
+              safety_note={safety_note}
+              sources={sources}
+              urgency={urgency}
+            />
+          ) : content ? (
             <Box
               className="markdown-content"
               sx={{
@@ -152,8 +261,59 @@ export const ChatMessage = ({ role, content }: ChatMessageProps) => {
             >
               <ReactMarkdown>{content}</ReactMarkdown>
             </Box>
+          ) : (
+            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+              Thinking...
+            </Typography>
           )}
         </Paper>
+        
+        {/* Hover Actions - User Messages */}
+        {isUser && isHovered && !isEditing && !disabled && id && (
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 0.5,
+              mt: 0.5,
+              justifyContent: 'flex-end',
+              animation: 'fadeIn 0.15s ease-out',
+            }}
+          >
+            <Tooltip title="Copy">
+              <IconButton size="small" onClick={handleCopy} sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}>
+                <ContentCopyIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Edit">
+              <IconButton size="small" onClick={() => setIsEditing(true)} sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}>
+                <EditIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Delete">
+              <IconButton size="small" onClick={() => onDelete?.(id)} sx={{ color: 'text.secondary', '&:hover': { color: 'error.main' } }}>
+                <DeleteIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
+        
+        {/* Hover Actions - AI Replies */}
+        {!isUser && isHovered && (
+          <Box
+            sx={{
+              display: 'flex',
+              gap: 0.5,
+              mt: 0.5,
+              animation: 'fadeIn 0.15s ease-out',
+            }}
+          >
+            <Tooltip title={copied ? 'Copied!' : 'Copy'}>
+              <IconButton size="small" onClick={handleCopy} sx={{ color: 'text.secondary', '&:hover': { color: 'primary.main' } }}>
+                <ContentCopyIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        )}
       </Box>
     </Box>
   );
