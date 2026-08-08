@@ -11,7 +11,8 @@ from database import (
     save_treatment, get_treatments, update_treatment, delete_treatment,
     get_milestones, delete_all_lab_data,
     save_checkup_record, get_checkup_records, update_checkup_record, delete_checkup_record,
-    get_setting, save_setting
+    get_setting, save_setting,
+    save_checkup_reminder, get_checkup_reminders, update_checkup_reminder, delete_checkup_reminder
 )
 from api.upload_parser import parse_csv, parse_pdf, parse_image
 from lab_warnings import check_trends
@@ -336,14 +337,12 @@ async def get_dashboard_full(user_id: str = Depends(get_current_user)):
             "lab_results": executor.submit(get_lab_results, None, user_id),
             "treatments": executor.submit(get_treatments, user_id),
             "checkup_records": executor.submit(get_checkup_records, user_id),
-            "next_checkup_date": executor.submit(get_setting, "next_checkup_date", user_id),
-            "next_checkup_items": executor.submit(get_setting, "next_checkup_bring_items", user_id),
+            "next_checkup_reminders": executor.submit(get_checkup_reminders, user_id),
         }
         lab_results = futures["lab_results"].result()
         treatments = futures["treatments"].result()
         checkup_records = futures["checkup_records"].result()
-        next_checkup_date = futures["next_checkup_date"].result()
-        next_checkup_items = futures["next_checkup_items"].result()
+        next_checkup_reminders = futures["next_checkup_reminders"].result()
 
     # Recalculate milestones
     recalculate_milestones(user_id=user_id)
@@ -379,6 +378,15 @@ async def get_dashboard_full(user_id: str = Depends(get_current_user)):
         for r in lab_results
     ]
 
+    # Next checkup from reminders table
+    next_checkup = {"date": None, "bring_items": None}
+    if next_checkup_reminders:
+        latest_reminder = next_checkup_reminders[0]
+        next_checkup = {
+            "date": latest_reminder["reminder_date"],
+            "bring_items": latest_reminder["bring_items"],
+        }
+
     return {
         "latest_values": latest,
         "current_treatment": current_treatment,
@@ -388,10 +396,7 @@ async def get_dashboard_full(user_id: str = Depends(get_current_user)):
         "lab_results": lab_by_type,
         "treatments": treatments,
         "checkup_records": checkup_records,
-        "next_checkup": {
-            "date": next_checkup_date,
-            "bring_items": next_checkup_items,
-        },
+        "next_checkup": next_checkup,
     }
 
 
@@ -497,6 +502,68 @@ async def delete_checkup(record_id: int, user_id: str = Depends(get_current_user
         raise HTTPException(status_code=404, detail="Record not found")
     delete_checkup_record(record_id)
     return {"message": "Deleted"}
+
+
+# ==========================================
+# CHECKUP REMINDERS
+# ==========================================
+
+class CheckupReminderCreate(BaseModel):
+    reminder_date: str
+    bring_items: str = ''
+
+class CheckupReminderUpdate(BaseModel):
+    reminder_date: str
+    bring_items: str = ''
+
+class CheckupReminderResponse(BaseModel):
+    id: int
+    reminder_date: str
+    bring_items: str | None
+    created_at: str
+
+
+@router.get("/checkup-reminders", response_model=list[CheckupReminderResponse])
+async def list_checkup_reminders(user_id: str = Depends(get_current_user)):
+    reminders = get_checkup_reminders(user_id=user_id)
+    return [CheckupReminderResponse(**r) for r in reminders]
+
+
+@router.post("/checkup-reminders", response_model=CheckupReminderResponse)
+async def create_checkup_reminder(reminder: CheckupReminderCreate, user_id: str = Depends(get_current_user)):
+    row_id = save_checkup_reminder(reminder.reminder_date, reminder.bring_items, user_id=user_id)
+    return CheckupReminderResponse(
+        id=row_id,
+        reminder_date=reminder.reminder_date,
+        bring_items=reminder.bring_items,
+        created_at=""
+    )
+
+
+@router.put("/checkup-reminders/{reminder_id}")
+async def update_checkup_reminder_endpoint(reminder_id: int, reminder: CheckupReminderUpdate, user_id: str = Depends(get_current_user)):
+    reminders = get_checkup_reminders(user_id=user_id)
+    reminder_ids = [r["id"] for r in reminders]
+    if reminder_id not in reminder_ids:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    updated = update_checkup_reminder(reminder_id, reminder.reminder_date, reminder.bring_items)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Reminder not found")
+    return {"message": "Reminder updated"}
+
+
+@router.delete("/checkup-reminders/{reminder_id}")
+async def delete_checkup_reminder_endpoint(reminder_id: int, user_id: str = Depends(get_current_user)):
+    reminders = get_checkup_reminders(user_id=user_id)
+    reminder_ids = [r["id"] for r in reminders]
+    if reminder_id not in reminder_ids:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    deleted = delete_checkup_reminder(reminder_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Reminder not found")
+    return {"message": "Reminder deleted"}
 
 
 # ==========================================
