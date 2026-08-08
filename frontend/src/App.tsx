@@ -14,9 +14,22 @@ import { ApiKeySetup } from './components/ApiKeySetup';
 import { useAuth } from './context/AuthContext';
 import { apiClient } from './api';
 
+interface Block {
+  type: 'explanation' | 'key_points' | 'steps' | 'table' | 'warning' | 'sources';
+  title?: string;
+  content: string | string[] | { headers: string[]; rows: string[][] };
+}
+
 interface Message {
+  id?: number;
   role: 'user' | 'assistant';
   content: string;
+  edited?: boolean;
+  blocks?: Block[];
+  summary?: string;
+  safety_note?: string | null;
+  sources?: string[];
+  urgency?: 'routine' | 'attention_urgent' | 'attention_emergency';
 }
 
 interface Session {
@@ -178,15 +191,34 @@ function App() {
         const data = JSON.parse(event.data);
 
         if (data.type === 'token') {
+          // Don't accumulate raw JSON content - just track that we're streaming
+          // The formatted blocks will arrive via the 'blocks' message type
+          setMessages(prev => {
+            const lastMessage = prev[prev.length - 1];
+            if (lastMessage?.role === 'assistant') {
+              return prev; // Already have an assistant message, just wait for blocks
+            }
+            return [...prev, { role: 'assistant', content: '' }];
+          });
+        } else if (data.type === 'blocks') {
+          // Store the parsed blocks and clear raw content
           setMessages(prev => {
             const lastMessage = prev[prev.length - 1];
             if (lastMessage?.role === 'assistant') {
               return [
                 ...prev.slice(0, -1),
-                { ...lastMessage, content: lastMessage.content + data.content },
+                {
+                  ...lastMessage,
+                  content: '', // Clear raw JSON content
+                  blocks: data.blocks,
+                  summary: data.summary,
+                  safety_note: data.safety_note,
+                  sources: data.sources,
+                  urgency: data.urgency,
+                },
               ];
             }
-            return [...prev, { role: 'assistant', content: data.content }];
+            return prev;
           });
         } else if (data.type === 'complete') {
           setIsLoading(false);
@@ -209,6 +241,69 @@ function App() {
       console.error('Failed to send message:', error);
       setIsLoading(false);
     }
+  };
+
+  const handleDeleteMessage = async (messageId: number) => {
+    if (!currentSessionId || isLoading) return;
+    
+    try {
+      await apiClient.delete(`/api/sessions/${currentSessionId}/messages/${messageId}`);
+      
+      // Remove the user message and the next AI reply
+      setMessages(prev => {
+        const msgIndex = prev.findIndex(m => m.id === messageId);
+        if (msgIndex === -1) return prev;
+        
+        // Check if next message is AI reply
+        const nextMsg = prev[msgIndex + 1];
+        if (nextMsg?.role === 'assistant') {
+          // Remove both messages
+          return [...prev.slice(0, msgIndex), ...prev.slice(msgIndex + 2)];
+        }
+        // Just remove the user message
+        return [...prev.slice(0, msgIndex), ...prev.slice(msgIndex + 1)];
+      });
+    } catch (error) {
+      console.error('Failed to delete message:', error);
+    }
+  };
+
+  const handleEditMessage = async (messageId: number, newContent: string) => {
+    if (!currentSessionId || isLoading) return;
+    
+    try {
+      // Update message in backend
+      await apiClient.put(`/api/sessions/${currentSessionId}/messages/${messageId}`, {
+        content: newContent
+      });
+      
+      // Find the message and the next AI reply
+      setMessages(prev => {
+        const msgIndex = prev.findIndex(m => m.id === messageId);
+        if (msgIndex === -1) return prev;
+        
+        // Mark message as edited
+        const updatedMsg = { ...prev[msgIndex], content: newContent, edited: true };
+        
+        // Check if next message is AI reply
+        const nextMsg = prev[msgIndex + 1];
+        if (nextMsg?.role === 'assistant') {
+          // Replace user message and remove AI reply
+          return [...prev.slice(0, msgIndex), updatedMsg, ...prev.slice(msgIndex + 2)];
+        }
+        // Just update the user message
+        return [...prev.slice(0, msgIndex), updatedMsg, ...prev.slice(msgIndex + 1)];
+      });
+      
+      // Send new message for AI response
+      handleSendMessage(newContent);
+    } catch (error) {
+      console.error('Failed to edit message:', error);
+    }
+  };
+
+  const handleCopyMessage = (content: string) => {
+    navigator.clipboard.writeText(content);
   };
 
   return (
@@ -392,9 +487,20 @@ function App() {
                 <>
                   {messages.map((message, index) => (
                     <ChatMessage
-                      key={index}
+                      key={message.id || index}
+                      id={message.id}
                       role={message.role}
                       content={message.content}
+                      edited={message.edited}
+                      blocks={message.blocks}
+                      summary={message.summary}
+                      safety_note={message.safety_note}
+                      sources={message.sources}
+                      urgency={message.urgency}
+                      onCopy={handleCopyMessage}
+                      onEdit={message.role === 'user' ? handleEditMessage : undefined}
+                      onDelete={message.role === 'user' ? handleDeleteMessage : undefined}
+                      disabled={isLoading}
                     />
                   ))}
                   {isLoading && (
