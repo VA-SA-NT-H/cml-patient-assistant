@@ -711,7 +711,7 @@ def cleanup_expired_reminders() -> int:
     """Delete all reminders where reminder_date is in the past. Returns count deleted."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM checkup_reminders WHERE reminder_date < CURRENT_DATE")
+    cursor.execute("DELETE FROM checkup_reminders WHERE reminder_date < CURRENT_DATE::text")
     count = cursor.rowcount
     conn.commit()
     conn.close()
