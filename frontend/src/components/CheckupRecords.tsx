@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Box, Typography, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField } from '@mui/material';
+import { Box, Typography, IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, CircularProgress } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
@@ -46,6 +46,8 @@ export const CheckupRecords = ({ data }: { data: CheckupRecord[] }) => {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selected, setSelected] = useState<CheckupRecord | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Form state
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
@@ -69,6 +71,7 @@ export const CheckupRecords = ({ data }: { data: CheckupRecord[] }) => {
   };
 
   const handleAdd = async () => {
+    setSaving(true);
     try {
       await apiClient.post('/api/checkup-records', {
         checkup_date: formDate,
@@ -80,6 +83,8 @@ export const CheckupRecords = ({ data }: { data: CheckupRecord[] }) => {
       fetchRecords();
     } catch (err) {
       console.error('Failed to add checkup record:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -94,6 +99,7 @@ export const CheckupRecords = ({ data }: { data: CheckupRecord[] }) => {
 
   const handleSaveEdit = async () => {
     if (!selected) return;
+    setSaving(true);
     try {
       await apiClient.put(`/api/checkup-records/${selected.id}`, {
         checkup_date: formDate,
@@ -106,6 +112,8 @@ export const CheckupRecords = ({ data }: { data: CheckupRecord[] }) => {
       fetchRecords();
     } catch (err) {
       console.error('Failed to update:', err);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -116,6 +124,7 @@ export const CheckupRecords = ({ data }: { data: CheckupRecord[] }) => {
 
   const handleConfirmDelete = async () => {
     if (!selected) return;
+    setDeleting(true);
     try {
       await apiClient.delete(`/api/checkup-records/${selected.id}`);
       setDeleteOpen(false);
@@ -123,6 +132,8 @@ export const CheckupRecords = ({ data }: { data: CheckupRecord[] }) => {
       fetchRecords();
     } catch (err) {
       console.error('Failed to delete:', err);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -280,7 +291,7 @@ export const CheckupRecords = ({ data }: { data: CheckupRecord[] }) => {
       )}
 
       {/* Add Dialog */}
-      <Dialog open={addOpen} onClose={() => setAddOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={addOpen} onClose={() => !saving && setAddOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Add checkup record</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
@@ -290,6 +301,7 @@ export const CheckupRecords = ({ data }: { data: CheckupRecord[] }) => {
               value={formDate}
               onChange={(e) => setFormDate(e.target.value)}
               InputLabelProps={{ shrink: true }}
+              disabled={saving}
               sx={{
                 '& input[type="date"]::-webkit-calendar-picker-indicator': {
                   filter: (theme) => theme.palette.mode === 'dark' ? 'invert(1)' : 'none',
@@ -302,6 +314,7 @@ export const CheckupRecords = ({ data }: { data: CheckupRecord[] }) => {
               onChange={(e) => setFormAdvice(e.target.value)}
               multiline
               rows={2}
+              disabled={saving}
             />
             <Box>
               <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, fontSize: '0.85rem' }}>
@@ -311,14 +324,17 @@ export const CheckupRecords = ({ data }: { data: CheckupRecord[] }) => {
             </Box>
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddOpen(false)}>Cancel</Button>
-          <Button onClick={handleAdd} variant="contained">Save</Button>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setAddOpen(false)} disabled={saving}>Cancel</Button>
+          <Button onClick={handleAdd} variant="contained" disabled={saving}>
+            {saving ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+            {saving ? 'Saving...' : 'Save'}
+          </Button>
         </DialogActions>
       </Dialog>
 
       {/* Edit Dialog */}
-      <Dialog open={editOpen} onClose={() => setEditOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog open={editOpen} onClose={() => !saving && setEditOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Edit checkup record</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
@@ -328,6 +344,7 @@ export const CheckupRecords = ({ data }: { data: CheckupRecord[] }) => {
               value={formDate}
               onChange={(e) => setFormDate(e.target.value)}
               InputLabelProps={{ shrink: true }}
+              disabled={saving}
               sx={{
                 '& input[type="date"]::-webkit-calendar-picker-indicator': {
                   filter: (theme) => theme.palette.mode === 'dark' ? 'invert(1)' : 'none',
@@ -340,6 +357,7 @@ export const CheckupRecords = ({ data }: { data: CheckupRecord[] }) => {
               onChange={(e) => setFormAdvice(e.target.value)}
               multiline
               rows={2}
+              disabled={saving}
             />
             <Box>
               <Typography variant="body2" sx={{ fontWeight: 500, mb: 1, fontSize: '0.85rem' }}>
@@ -349,21 +367,27 @@ export const CheckupRecords = ({ data }: { data: CheckupRecord[] }) => {
             </Box>
           </Box>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditOpen(false)}>Cancel</Button>
-          <Button onClick={handleSaveEdit} variant="contained">Save</Button>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setEditOpen(false)} disabled={saving}>Cancel</Button>
+          <Button onClick={handleSaveEdit} variant="contained" disabled={saving}>
+            {saving ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+            {saving ? 'Saving...' : 'Save'}
+          </Button>
         </DialogActions>
       </Dialog>
 
       {/* Delete Dialog */}
-      <Dialog open={deleteOpen} onClose={() => setDeleteOpen(false)}>
+      <Dialog open={deleteOpen} onClose={() => !deleting && setDeleteOpen(false)}>
         <DialogTitle>Delete record</DialogTitle>
         <DialogContent>
           <Typography>Delete checkup record from {formatDate(selected?.checkup_date || '')}?</Typography>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeleteOpen(false)}>Cancel</Button>
-          <Button onClick={handleConfirmDelete} color="error" variant="contained">Delete</Button>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setDeleteOpen(false)} disabled={deleting}>Cancel</Button>
+          <Button onClick={handleConfirmDelete} color="error" variant="contained" disabled={deleting}>
+            {deleting ? <CircularProgress size={16} sx={{ mr: 1, color: 'white' }} /> : null}
+            {deleting ? 'Deleting...' : 'Delete'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

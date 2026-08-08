@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Box, Typography, IconButton } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Box, Typography, IconButton, CircularProgress } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { apiClient } from '../api';
@@ -39,6 +39,7 @@ export const DataEntryDialog = ({ open, onClose, onSaved }: Props) => {
   const [customValue, setCustomValue] = useState('');
   const [customUnit, setCustomUnit] = useState('');
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const updateTestValue = (index: number, value: string) => {
     const updated = [...tests];
@@ -99,6 +100,7 @@ export const DataEntryDialog = ({ open, onClose, onSaved }: Props) => {
     }
 
     try {
+      setSaving(true);
       await apiClient.post('/api/lab-results/bulk', { results });
       setTests([
         { key: 'bcr_abl1', value: '' },
@@ -112,13 +114,15 @@ export const DataEntryDialog = ({ open, onClose, onSaved }: Props) => {
       onClose();
     } catch (err) {
       setError('Failed to save. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
   const availablePresets = TEST_TYPES.filter(p => !tests.some(t => t.key === p.key));
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={open} onClose={() => !saving && onClose()} maxWidth="sm" fullWidth>
       <DialogTitle>Add lab results</DialogTitle>
       <DialogContent>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
@@ -239,9 +243,12 @@ export const DataEntryDialog = ({ open, onClose, onSaved }: Props) => {
           )}
         </Box>
       </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={handleSubmit} variant="contained">Save results</Button>
+      <DialogActions sx={{ px: 3, pb: 2.5 }}>
+        <Button onClick={onClose} disabled={saving}>Cancel</Button>
+        <Button onClick={handleSubmit} variant="contained" disabled={saving}>
+          {saving ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
+          {saving ? 'Saving...' : 'Save results'}
+        </Button>
       </DialogActions>
     </Dialog>
   );

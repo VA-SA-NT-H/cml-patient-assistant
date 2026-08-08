@@ -20,6 +20,7 @@ import {
   useTheme,
   Avatar,
   Tooltip,
+  CircularProgress,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import AddIcon from '@mui/icons-material/Add';
@@ -74,6 +75,7 @@ export const Sidebar = ({
   const [editingSession, setEditingSession] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [deletingSession, setDeletingSession] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user } = useAuth();
 
@@ -117,10 +119,15 @@ export const Sidebar = ({
     setDeletingSession(sessionId);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (deletingSession) {
-      onDeleteSession(deletingSession);
-      setDeletingSession(null);
+      setDeleting(true);
+      try {
+        await onDeleteSession(deletingSession);
+        setDeletingSession(null);
+      } finally {
+        setDeleting(false);
+      }
     }
   };
 
@@ -511,10 +518,11 @@ export const Sidebar = ({
                 position: 'fixed',
                 top: 12,
                 left: 12,
-                zIndex: 1300,
+                zIndex: 1100,
                 bgcolor: 'background.paper',
                 border: '1px solid',
                 borderColor: 'divider',
+                boxShadow: 1,
                 '&:hover': { bgcolor: 'action.hover' },
               }}
               aria-label="Open menu"
@@ -547,7 +555,7 @@ export const Sidebar = ({
         open={editingSession !== null}
         onClose={() => setEditingSession(null)}
         PaperProps={{
-          sx: { borderRadius: 3, minWidth: 360 },
+          sx: { borderRadius: 3, minWidth: { xs: 'auto', sm: 360 }, mx: { xs: 2, sm: 0 } },
         }}
       >
         <DialogTitle sx={{ fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600 }}>
@@ -583,9 +591,9 @@ export const Sidebar = ({
       {/* Delete Dialog */}
       <Dialog
         open={deletingSession !== null}
-        onClose={() => setDeletingSession(null)}
+        onClose={() => !deleting && setDeletingSession(null)}
         PaperProps={{
-          sx: { borderRadius: 3, minWidth: 360 },
+          sx: { borderRadius: 3, minWidth: { xs: 'auto', sm: 360 }, mx: { xs: 2, sm: 0 } },
         }}
       >
         <DialogTitle sx={{ fontFamily: '"Space Grotesk", sans-serif', fontWeight: 600 }}>
@@ -597,11 +605,12 @@ export const Sidebar = ({
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button onClick={() => setDeletingSession(null)} color="inherit">
+          <Button onClick={() => setDeletingSession(null)} color="inherit" disabled={deleting}>
             Cancel
           </Button>
-          <Button onClick={handleConfirmDelete} color="error" variant="contained">
-            Delete
+          <Button onClick={handleConfirmDelete} color="error" variant="contained" disabled={deleting}>
+            {deleting ? <CircularProgress size={16} sx={{ mr: 1, color: 'white' }} /> : null}
+            {deleting ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

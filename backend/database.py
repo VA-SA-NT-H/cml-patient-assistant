@@ -205,10 +205,67 @@ def get_session_messages(session_id: str):
     """Retrieves all messages for a specific session ID."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT role, content FROM messages WHERE session_id = %s", (session_id,))
+    cursor.execute("SELECT id, role, content FROM messages WHERE session_id = %s", (session_id,))
     messages = cursor.fetchall()
     conn.close()
-    return [{"role": role, "content": content} for role, content in messages]
+    return [{"id": id, "role": role, "content": content} for id, role, content in messages]
+
+
+def update_message(message_id: int, content: str) -> bool:
+    """Updates a message's content. Returns True if updated."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE messages SET content = %s WHERE id = %s", (content, message_id))
+    updated = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return updated
+
+
+def delete_message_and_reply(message_id: int) -> bool:
+    """Deletes a message and the next AI reply in sequence. Returns True if deleted."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Get the message to find its session
+    cursor.execute("SELECT session_id FROM messages WHERE id = %s", (message_id,))
+    result = cursor.fetchone()
+    if not result:
+        conn.close()
+        return False
+    
+    session_id = result[0]
+    
+    # Get all messages in order to find the next AI reply
+    cursor.execute(
+        "SELECT id, role FROM messages WHERE session_id = %s ORDER BY id",
+        (session_id,)
+    )
+    messages = cursor.fetchall()
+    
+    # Find the index of the target message
+    target_index = None
+    for i, (id, role) in enumerate(messages):
+        if id == message_id:
+            target_index = i
+            break
+    
+    if target_index is None:
+        conn.close()
+        return False
+    
+    # Delete the user message
+    cursor.execute("DELETE FROM messages WHERE id = %s", (message_id,))
+    
+    # Delete the next AI reply if it exists
+    if target_index + 1 < len(messages):
+        next_id, next_role = messages[target_index + 1]
+        if next_role == "assistant":
+            cursor.execute("DELETE FROM messages WHERE id = %s", (next_id,))
+    
+    conn.commit()
+    conn.close()
+    return True
 
 
 def delete_session(session_id: str):
