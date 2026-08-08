@@ -11,7 +11,9 @@ from database import (
     get_session_messages, 
     create_new_session, 
     delete_session, 
-    rename_session
+    rename_session,
+    update_message,
+    delete_message_and_reply
 )
 from auth import get_current_user
 
@@ -24,6 +26,7 @@ class SessionRename(BaseModel):
     title: str
 
 class MessageResponse(BaseModel):
+    id: int
     role: str
     content: str
 
@@ -75,4 +78,44 @@ async def get_messages(session_id: str, user_id: str = Depends(get_current_user)
     if session_id not in session_ids:
         raise HTTPException(status_code=403, detail="Not authorized")
     messages = get_session_messages(session_id)
-    return [MessageResponse(role=m["role"], content=m["content"]) for m in messages]
+    return [MessageResponse(id=m["id"], role=m["role"], content=m["content"]) for m in messages]
+
+class MessageUpdate(BaseModel):
+    content: str
+
+@router.put("/sessions/{session_id}/messages/{message_id}")
+async def update_message_endpoint(
+    session_id: str, 
+    message_id: int, 
+    message: MessageUpdate, 
+    user_id: str = Depends(get_current_user)
+):
+    # Verify session belongs to user
+    sessions = get_all_sessions(user_id=user_id)
+    session_ids = [s[0] for s in sessions]
+    if session_id not in session_ids:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    updated = update_message(message_id, message.content)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Message not found")
+    
+    return {"message": "Message updated"}
+
+@router.delete("/sessions/{session_id}/messages/{message_id}")
+async def delete_message_endpoint(
+    session_id: str, 
+    message_id: int, 
+    user_id: str = Depends(get_current_user)
+):
+    # Verify session belongs to user
+    sessions = get_all_sessions(user_id=user_id)
+    session_ids = [s[0] for s in sessions]
+    if session_id not in session_ids:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    deleted = delete_message_and_reply(message_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Message not found")
+    
+    return {"message": "Message deleted"}
