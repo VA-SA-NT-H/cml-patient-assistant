@@ -44,6 +44,31 @@ const QUICK_STARTERS = [
   { icon: <FavoriteIcon sx={{ fontSize: 16 }} />, label: 'Lifestyle tips', message: 'What lifestyle changes can help me manage CML better?' },
 ];
 
+function parseStoredMessage(msg: Message): Message {
+  if (msg.role !== 'assistant' || msg.blocks) return msg;
+  let cleaned = msg.content.trim();
+  if (cleaned.startsWith("```")) {
+    const lines = cleaned.split("\n");
+    if (lines[0].startsWith("```")) lines.shift();
+    if (lines.length && lines[lines.length - 1].trim() === "```") lines.pop();
+    cleaned = lines.join("\n");
+  }
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed.sections)) {
+      return {
+        ...msg,
+        blocks: parsed.sections,
+        summary: parsed.summary || "",
+        safety_note: parsed.safety_note || null,
+        sources: parsed.sources || [],
+        urgency: parsed.urgency || "routine",
+      };
+    }
+  } catch {}
+  return msg;
+}
+
 function formatSessionDate(): string {
   const now = new Date();
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -136,7 +161,7 @@ function App() {
     try {
       const response = await apiClient.get(`/api/sessions/${sessionId}/messages`);
       const data = await response.json();
-      setMessages(data);
+      setMessages(data.map(parseStoredMessage));
     } catch (error) {
       console.error('Failed to fetch messages:', error);
     }
