@@ -293,40 +293,6 @@ function App() {
     }
   };
 
-  const handleEditMessage = async (messageId: number, newContent: string) => {
-    if (!currentSessionId || isLoading) return;
-    
-    try {
-      // Update message in backend
-      await apiClient.put(`/api/sessions/${currentSessionId}/messages/${messageId}`, {
-        content: newContent
-      });
-      
-      // Find the message and the next AI reply
-      setMessages(prev => {
-        const msgIndex = prev.findIndex(m => m.id === messageId);
-        if (msgIndex === -1) return prev;
-        
-        // Mark message as edited
-        const updatedMsg = { ...prev[msgIndex], content: newContent, edited: true };
-        
-        // Check if next message is AI reply
-        const nextMsg = prev[msgIndex + 1];
-        if (nextMsg?.role === 'assistant') {
-          // Replace user message and remove AI reply
-          return [...prev.slice(0, msgIndex), updatedMsg, ...prev.slice(msgIndex + 2)];
-        }
-        // Just update the user message
-        return [...prev.slice(0, msgIndex), updatedMsg, ...prev.slice(msgIndex + 1)];
-      });
-      
-      // Send new message for AI response
-      handleSendMessage(newContent);
-    } catch (error) {
-      console.error('Failed to edit message:', error);
-    }
-  };
-
   const handleCopyMessage = async (content: string) => {
     try {
       await navigator.clipboard.writeText(content);
@@ -534,7 +500,6 @@ function App() {
                       sources={message.sources}
                       urgency={message.urgency}
                       onCopy={handleCopyMessage}
-                      onEdit={message.role === 'user' ? handleEditMessage : undefined}
                       onDelete={message.role === 'user' ? handleDeleteMessage : undefined}
                       disabled={isLoading}
                     />
