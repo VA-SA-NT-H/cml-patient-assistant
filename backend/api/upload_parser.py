@@ -1,8 +1,12 @@
 import csv
 import io
+import os
 import re
+import logging
 from datetime import datetime
 from PyPDF2 import PdfReader
+
+logger = logging.getLogger(__name__)
 
 
 def parse_csv(file_content: str) -> list[dict]:
@@ -123,15 +127,12 @@ def parse_image(file_content: bytes) -> list[dict]:
         return results
 
     try:
-        import numpy as np
         from PIL import Image
         image = Image.open(io.BytesIO(file_content))
-    except ImportError:
-        results.append({
-            "test_type": "other", "value": "", "unit": "", "test_date": "",
-            "notes": "Image dependencies not installed", "valid": False, "error": "Pillow or numpy not installed",
-        })
-        return results
+        # Ensure image is valid
+        image.verify()
+        # Re-open after verify as verify closes/invalidates the image object
+        image = Image.open(io.BytesIO(file_content))
     except Exception:
         results.append({
             "test_type": "other", "value": "", "unit": "", "test_date": "",
@@ -139,28 +140,36 @@ def parse_image(file_content: bytes) -> list[dict]:
         })
         return results
 
-    try:
-        from rapidocr_onnxruntime import RapidOCR
-        ocr = RapidOCR()
-        image_array = np.array(image)
-        ocr_result, _ = ocr(image_array)
-        
-        if ocr_result:
-            text = "\n".join([line[1] for line in ocr_result])
-        else:
+    text = ""
+    # Use Gemini Vision for OCR
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if api_key:
+        try:
+            from google import genai
+            from google.genai import types
+
+            client = genai.Client(api_key=api_key)
+            prompt = (
+                "Extract all text from this medical lab report image verbatim. "
+                "Include all test names (e.g. BCR-ABL1, WBC, Platelets, Hemoglobin), "
+                "numerical values, units, and dates."
+            )
+            # Determine mime type
+            img_format = (image.format or "PNG").lower()
+            mime_type = f"image/{img_format}" if img_format in ["png", "jpeg", "jpg", "webp"] else "image/png"
+            
+            response = client.models.generate_content(
+                model=os.environ.get("GEMINI_MODEL", "gemini-2.0-flash"),
+                contents=[
+                    types.Part.from_bytes(data=file_content, mime_type=mime_type),
+                    prompt
+                ]
+            )
+            if response and response.text:
+                text = response.text
+        except Exception as e:
+            logger.warning(f"Gemini OCR extraction failed, falling back: {e}")
             text = ""
-    except ImportError:
-        results.append({
-            "test_type": "other", "value": "", "unit": "", "test_date": "",
-            "notes": "RapidOCR not installed", "valid": False, "error": "rapidocr-onnxruntime not installed",
-        })
-        return results
-    except Exception as e:
-        results.append({
-            "test_type": "other", "value": "", "unit": "", "test_date": "",
-            "notes": f"OCR failed: {str(e)}", "valid": False, "error": f"OCR processing error: {str(e)}",
-        })
-        return results
 
     patterns = {
         "bcr_abl1": r"BCR[-\s]*ABL1?\s*[:\s]*(\d+\.?\d*)\s*%?",
