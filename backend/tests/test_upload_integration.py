@@ -86,7 +86,7 @@ def test_upload_multiple_image_formats():
         assert response.status_code == 200, f"Failed for {format_name}"
 
 def test_upload_image_no_external_binary():
-    """Test that upload-image works without external Tesseract binary."""
+    """Test that upload-image works without external OCR binary."""
     image_bytes = create_test_image()
     response = client.post(
         "/api/upload-image",
@@ -95,7 +95,7 @@ def test_upload_image_no_external_binary():
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
-    # RapidOCR is pure Python, should work without external binaries
+    # Gemini Vision OCR or fallback parser handles images without local OCR binaries
     # Empty image should return no recognized values
     assert len(data) >= 1
     assert data[0]["valid"] is False
